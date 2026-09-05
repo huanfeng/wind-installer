@@ -10,9 +10,13 @@
 //!
 //! ## 只清「悬空」，不碰健康注册
 //! 判据：`HKLM\Software\Classes\CLSID\{clsid}\InprocServer32` 指向的 DLL 在磁盘上**已不存在**。
-//! - 原地升级（旧 DLL 仍在）→ 判为健康 → 不动，留给随后的 `RegisterCom` 覆盖。
-//! - 旧 DLL 被删或被改名成 `.old_*`（`UnregisterOldCom` 因 `dll.exists()==false` 而跳过）
-//!   → 判为悬空 → 清除 → `ExtractFiles` 落地新 DLL 后由 `RegisterCom` 重建为正确注册。
+//! 判定只看注册里记录的那个路径本身——注册指向系统目录副本（现行部署形态）时，
+//! 副本在即健康，安装目录里文件的去留不影响判定，不会因系统副本而误判。
+//! - 原地升级（注册指向系统目录旧副本、副本仍在）→ 判为健康 → 不动，留给随后的
+//!   `RegisterCom` 覆盖部署。
+//! - 注册指向的 DLL 被删或被改名成 `.old_*`（`UnregisterOldCom` 因副本不存在而跳过）
+//!   → 判为悬空 → 清除 → `ExtractFiles` 落地新 DLL、`RegisterCom` 部署系统副本后
+//!   重建为正确注册。
 //!
 //! ## 刻意不做
 //! 不遍历删除 `HKCU\...\CTF\Assemblies` / `SortOrder`：那是 Windows 维护的输入法排序缓存，
@@ -43,8 +47,8 @@ impl SweepReport {
 
 /// 清扫当前变体（由 `ime` 的 clsid/profile 决定）遗留的悬空 TSF 注册。
 ///
-/// `install_dir` 仅用于日志上下文；判定悬空只看注册表里记录的 DLL 路径是否存在，
-/// 与本次安装目录无关（旧注册可能指向任意历史路径）。
+/// 判定悬空只看注册表里 `InprocServer32` 记录的 DLL 路径是否存在，与本次安装目录
+/// 无关（旧注册可能指向任意历史路径）。
 pub fn sweep_dangling_ime(ime: &ImeInfo, app_id: &str) -> SweepReport {
     let mut report = SweepReport::default();
 

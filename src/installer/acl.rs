@@ -25,6 +25,14 @@ pub fn set_dll_permissions(install_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// 授予单个文件 ALL APPLICATION PACKAGES 读取执行权限。
+///
+/// 供部署到系统目录的 COM DLL 副本使用：AppContainer 宿主（UWP/沙箱应用）加载 COM
+/// 服务器的前提，与上面的 `acl_dlls` 是同一授权，只是作用在系统副本上。
+pub fn grant_app_packages_rx(path: &Path) -> Result<(), String> {
+    set_file_acl(path, APP_PACKAGES_SID, "RX")
+}
+
 /// 设置文件 ACL（无窗口）
 fn set_file_acl(path: &Path, sid: &str, permission: &str) -> Result<(), String> {
     let path_str = path.to_string_lossy();
