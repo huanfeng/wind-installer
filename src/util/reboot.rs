@@ -196,6 +196,8 @@ pub fn schedule_dir_on_reboot(dir: &Path) {
 ///
 /// 同卷改名只改目录项，对已被打开/已加载为映像的文件同样成立；只有被以不含
 /// `FILE_SHARE_DELETE` 方式打开的文件会失败，那时退回排原路径（见不变量 2）。
+/// 调用方有两处：卸载删除安装目录二进制，以及 IME 系统副本的覆盖/删除让路
+/// （`installer::ime`）——后者不在安装目录里，`delete_install_files` 够不着。
 ///
 /// **已经是 `.old_xxxxxxxx` 的名字原样返回、不再改一次。** 这不是洁癖：卸载时
 /// `delete_install_files` 的 binaries 循环会先把锁定的 `app.exe` 改成
@@ -203,7 +205,7 @@ pub fn schedule_dir_on_reboot(dir: &Path) {
 /// 文件。再改一次名的后果是队列里出现**两条**——先排的那条指向已不存在的路径，成了
 /// 空转指令，而 `pending_summary()` 报给用户的「N 个文件待重启后清理」也随之偏大。
 /// 那个随机后缀本来就是防撞的，套第二层没有任何收益。
-fn stash_aside(path: &Path) -> PathBuf {
+pub(crate) fn stash_aside(path: &Path) -> PathBuf {
     let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
         return path.to_path_buf();
     };

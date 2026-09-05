@@ -27,7 +27,8 @@ const RECEIPT_VALUE: &str = "Receipt";
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum ReceiptEntry {
-    /// regsvr32 注册的 COM DLL。`wow64` 表示用 SysWOW64 的 regsvr32 注册（32 位 DLL）。
+    /// regsvr32 注册的 COM DLL（系统目录副本的绝对路径；撤销时反注册并删除该副本）。
+    /// `wow64` 表示用 SysWOW64 的 regsvr32 注册（32 位 DLL）。
     ComRegistered { dll: String, wow64: bool },
     /// TSF 输入法 profile 字符串（`<lang>:<clsid><guid>`）。
     InputMethodRegistered { profile: String },
