@@ -153,8 +153,13 @@ pub fn uninstall_command(uninstall_exe: &str) -> String {
 /// 两头都已修：解析见 [`crate::uninstaller::args`]，静默路径见
 /// [`crate::uninstaller::run_silent`]。下面 `arp_command_tests` 里有一条测试把这条
 /// 命令行原样喂回解析器 —— 光断言字符串「长得对」是不够的，从前那条也长得很对。
+///
+/// **带 `--keep-user-data`**：调这条的是包管理器（`winget uninstall`、Scoop 的卸载脚本）
+/// 与批量部署，它们的惯例是「卸程序、留数据」——重装后用户词库与配置原样还在。不带的话
+/// 静默卸载会连 `%APPDATA%\<app.id>` 一起删掉，而且全程没有任何界面能让人反悔。
+/// 要连数据一起删的，走控制面板的交互式向导，那里有显式的勾选框。
 pub fn quiet_uninstall_command(uninstall_exe: &str) -> String {
-    format!("\"{}\" --silent", uninstall_exe)
+    format!("\"{}\" --silent --keep-user-data", uninstall_exe)
 }
 
 /// ARP 里那两条命令行，连值名一起。
@@ -585,6 +590,18 @@ mod arp_command_tests {
         assert!(
             parsed.silent,
             "QuietUninstallString 没能让卸载器进静默路径：{:?}",
+            argv
+        );
+    }
+
+    /// 包管理器走这条卸载，不能顺手删掉用户数据。
+    #[test]
+    fn quiet_uninstall_string_keeps_user_data() {
+        let argv = split_command_line(&quiet_uninstall_command(EXE));
+        let parsed = args::parse(&argv[1..]);
+        assert!(
+            parsed.keep_user_data,
+            "QuietUninstallString 会删掉用户数据：{:?}",
             argv
         );
     }

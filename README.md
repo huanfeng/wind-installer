@@ -68,7 +68,7 @@ wind-packer build --config app.toml --stub wind-installer.exe
 | 值 | 内容 | 行为 |
 |---|---|---|
 | `UninstallString` | `"<安装目录>\uninstall.exe"` | 交互式向导（控制面板 / 设置里点「卸载」走这条） |
-| `QuietUninstallString` | `"<安装目录>\uninstall.exe" --silent` | 无人值守，无任何界面（winget / SCCM 走这条） |
+| `QuietUninstallString` | `"<安装目录>\uninstall.exe" --silent --keep-user-data` | 无人值守，无任何界面，保留用户数据（winget / SCCM 走这条） |
 
 `uninstall.exe` 认两个参数：`--silent`、`--keep-user-data`（静默时保留 `%APPDATA%\<app.id>`）。
 不认识的参数**只跳过它自己**，后面的照常解析 —— 存量机器的 ARP 条目是老版本安装器写的，
