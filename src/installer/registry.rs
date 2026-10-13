@@ -158,8 +158,15 @@ pub fn uninstall_command(uninstall_exe: &str) -> String {
 /// 与批量部署，它们的惯例是「卸程序、留数据」——重装后用户词库与配置原样还在。不带的话
 /// 静默卸载会连 `%APPDATA%\<app.id>` 一起删掉，而且全程没有任何界面能让人反悔。
 /// 要连数据一起删的，走控制面板的交互式向导，那里有显式的勾选框。
+///
+/// **带 `--reboot-as-success`**：winget 跑这条时任何非 0 都判卸载失败，3010 也不例外；
+/// 而卸载后的「需重启」只是被占用的旧 DLL 延后删除，没有功能后果（详见
+/// [`crate::uninstaller::args::UninstallArgs`]）。
 pub fn quiet_uninstall_command(uninstall_exe: &str) -> String {
-    format!("\"{}\" --silent --keep-user-data", uninstall_exe)
+    format!(
+        "\"{}\" --silent --keep-user-data --reboot-as-success",
+        uninstall_exe
+    )
 }
 
 /// ARP 里那两条命令行，连值名一起。
@@ -602,6 +609,18 @@ mod arp_command_tests {
         assert!(
             parsed.keep_user_data,
             "QuietUninstallString 会删掉用户数据：{:?}",
+            argv
+        );
+    }
+
+    /// winget 把卸载命令的 3010 当失败，这条必须让需重启的卸载以 0 退出。
+    #[test]
+    fn quiet_uninstall_string_reports_reboot_as_success() {
+        let argv = split_command_line(&quiet_uninstall_command(EXE));
+        let parsed = args::parse(&argv[1..]);
+        assert!(
+            parsed.reboot_as_success,
+            "QuietUninstallString 会让 winget 把需重启的卸载判成失败：{:?}",
             argv
         );
     }

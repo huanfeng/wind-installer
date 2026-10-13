@@ -47,6 +47,10 @@ struct Args {
     #[arg(long)]
     keep_user_data: bool,
 
+    /// 静默卸载「成功但需重启」时以 0 退出而非 3010（与 `uninstall.exe` 同名同义）
+    #[arg(long)]
+    reboot_as_success: bool,
+
     /// 强制软渲染（禁用 Direct2D 硬件加速）；等效于设置环境变量 WIND_SOFT_RENDER=1
     #[arg(long)]
     soft_render: bool,
@@ -208,7 +212,7 @@ fn run_uninstall(args: Args) {
         // 退出码的三条出口（残留不算失败 / 3010 必须可达 / 其余为 0）都在
         // `uninstaller::run_silent` 里，与 `uninstall.exe --silent` 共用同一份——
         // 那边才是 ARP `QuietUninstallString` 真正调起的二进制。
-        let code = uninstaller::run_silent(args.keep_user_data);
+        let code = uninstaller::run_silent(args.keep_user_data, args.reboot_as_success);
         util::single::release_lock();
         std::process::exit(code);
     }

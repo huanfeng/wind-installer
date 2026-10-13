@@ -53,6 +53,7 @@ wind-packer build --config app.toml --stub wind-installer.exe
 | `--dir <DIR>` | 安装目录 |
 | `--datadir <DIR>` | 数据目录 |
 | `--keep-user-data` | 卸载时保留用户数据 |
+| `--reboot-as-success` | 静默卸载需重启时以 0 退出而非 3010 |
 | `--soft-render` | 强制软渲染，等效于设置 `WIND_SOFT_RENDER=1` |
 
 子命令 `install` / `uninstall` 分别对应安装与卸载模式。
@@ -68,9 +69,12 @@ wind-packer build --config app.toml --stub wind-installer.exe
 | 值 | 内容 | 行为 |
 |---|---|---|
 | `UninstallString` | `"<安装目录>\uninstall.exe"` | 交互式向导（控制面板 / 设置里点「卸载」走这条） |
-| `QuietUninstallString` | `"<安装目录>\uninstall.exe" --silent --keep-user-data` | 无人值守，无任何界面，保留用户数据（winget / SCCM 走这条） |
+| `QuietUninstallString` | `"<安装目录>\uninstall.exe" --silent --keep-user-data --reboot-as-success` | 无人值守，无任何界面，保留用户数据，需重启也报 0（winget / SCCM 走这条） |
 
-`uninstall.exe` 认两个参数：`--silent`、`--keep-user-data`（静默时保留 `%APPDATA%\<app.id>`）。
+`uninstall.exe` 认三个参数：`--silent`、`--keep-user-data`（静默时保留 `%APPDATA%\<app.id>`）、
+`--reboot-as-success`（静默卸载需重启时以 0 退出）。最后一个是为 winget 加的：它跑 ARP 卸载命令时
+任何非 0 都判失败，3010 也不例外；而卸载后的「需重启」只是被宿主进程占着的旧 DLL 延后删除，
+不重启也没有功能后果。需重启的事实仍记在 `%TEMP%\wind_installer_args.log`。
 不认识的参数**只跳过它自己**，后面的照常解析 —— 存量机器的 ARP 条目是老版本安装器写的，
 里面有一个已经废弃的 `--uninstall`，新卸载器必须能被那些条目正常调起。
 
@@ -88,7 +92,7 @@ wind-packer build --config app.toml --stub wind-installer.exe
 | 1 | 失败 |
 | 5 | 什么都没做：需要管理员权限（`ERROR_ACCESS_DENIED`）。**只有静默卸载**会返回它 |
 | 1618 | 什么都没做：另一个安装/卸载实例正在运行（`ERROR_INSTALL_ALREADY_RUNNING`） |
-| 3010 | 成功，但需重启以完成清理（`ERROR_SUCCESS_REBOOT_REQUIRED`） |
+| 3010 | 成功，但需重启以完成清理（`ERROR_SUCCESS_REBOOT_REQUIRED`）。静默卸载带 `--reboot-as-success` 时改报 0 |
 
 3010 表示安装成功，取值与 MSI、NSIS 一致。调用方若只判断 `exit == 0`，会把需要重启的情况误判为安装失败。
 

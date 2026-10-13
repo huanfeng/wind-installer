@@ -93,8 +93,10 @@ pub fn perform_uninstall(options: &CleanupOptions) -> UninstallResult {
 /// - **有残留 ≠ 失败**。卸载已经跑完、ARP 条目多半也已移除，调用方重试没有意义；
 ///   报成非 0 只会让批量部署把它当待重试项反复跑。详情写进卸载日志，这里留一行指路。
 /// - **`need_reboot` 的判断不能排在残留之后被挡掉**：3010 是对外承诺，必须可达。
+///   调用方显式传了 `--reboot-as-success` 时改报 0（理由见 [`args::UninstallArgs`]），
+///   需重启这件事仍写进启动日志。
 /// - 其余即 0。
-pub fn run_silent(keep_user_data: bool) -> i32 {
+pub fn run_silent(keep_user_data: bool, reboot_as_success: bool) -> i32 {
     use crate::util::exitcode;
 
     let options = CleanupOptions {
@@ -116,12 +118,17 @@ pub fn run_silent(keep_user_data: bool) -> i32 {
     let code = if result.need_reboot {
         // 无界面模式没有「让用户看到提示再关窗」的余地，退出码是唯一的通道；
         // 而光给一个 3010、不说是哪些文件卡住了，调用方同样无从查起。
+        let code = if reboot_as_success {
+            exitcode::SUCCESS
+        } else {
+            exitcode::REBOOT_REQUIRED
+        };
         crate::util::log::append_startup_line(&format!(
             "uninstall: exit={} reboot_required {}\n",
-            exitcode::REBOOT_REQUIRED,
+            code,
             crate::util::reboot::pending_summary()
         ));
-        exitcode::REBOOT_REQUIRED
+        code
     } else {
         exitcode::SUCCESS
     };

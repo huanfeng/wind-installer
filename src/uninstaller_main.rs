@@ -46,7 +46,7 @@ fn main() {
     }
 
     if args.silent {
-        let code = uninstaller::run_silent(args.keep_user_data);
+        let code = uninstaller::run_silent(args.keep_user_data, args.reboot_as_success);
         util::single::release_lock();
         std::process::exit(code);
     }
@@ -74,9 +74,10 @@ fn main() {
 /// 到底是调用方写错了参数，还是这边没认出来。
 fn log_startup(args: &uninstaller::args::UninstallArgs) {
     util::log::append_startup_line(&format!(
-        "uninstall-start: silent={} keep_user_data={} admin={} argv={:?}\n",
+        "uninstall-start: silent={} keep_user_data={} reboot_as_success={} admin={} argv={:?}\n",
         args.silent,
         args.keep_user_data,
+        args.reboot_as_success,
         util::admin::is_admin(),
         std::env::args_os().collect::<Vec<_>>(),
     ));

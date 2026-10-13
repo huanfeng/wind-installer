@@ -43,6 +43,14 @@ pub struct UninstallArgs {
     /// 而不带 `--silent` 是「被接受、被记进启动日志、然后什么也不做」。
     /// 界面上的勾选优先于命令行是对的 —— 用户刚亲手勾过的东西不该被一个 flag 推翻。
     pub keep_user_data: bool,
+    /// 静默卸载「成功但需重启」时以 0 而不是 3010 退出。
+    ///
+    /// 给 `QuietUninstallString` 用的：winget 跑 ARP 卸载命令时**任何非 0 都判失败**
+    /// （实测 `UninstallString uninstaller failed: 3010` → 0x8A150030），清单里的
+    /// `ExpectedReturnCodes` 也不作用于卸载。而卸载后的「需重启」只是被宿主进程占着的
+    /// 旧 DLL 要等重启才删得掉——输入法已反注册、服务已退出，不重启也没有任何功能后果，
+    /// 不值得让 winget 报一次失败。仍会记进启动日志。只在 `--silent` 下起作用。
+    pub reboot_as_success: bool,
 }
 
 /// 解析一串参数（**不含** argv[0]）。
@@ -58,6 +66,7 @@ pub fn parse<S: AsRef<OsStr>>(argv: &[S]) -> UninstallArgs {
         match a.as_ref().to_string_lossy().as_ref() {
             "--silent" => out.silent = true,
             "--keep-user-data" => out.keep_user_data = true,
+            "--reboot-as-success" => out.reboot_as_success = true,
             _ => {}
         }
     }
@@ -114,6 +123,13 @@ mod tests {
         let args = parse(&["--keep-user-data"]);
         assert!(args.keep_user_data);
         assert!(!args.silent, "--keep-user-data 不该顺带打开静默");
+    }
+
+    #[test]
+    fn reboot_as_success_alone() {
+        let args = parse(&["--reboot-as-success"]);
+        assert!(args.reboot_as_success);
+        assert!(!args.silent, "--reboot-as-success 不该顺带打开静默");
     }
 
     /// 认的是完整 token，不是前缀/子串 —— 免得哪天 `--silently-something` 之类
