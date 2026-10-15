@@ -150,3 +150,9 @@ cargo clippy --lib
 - `release.yml`（push tag `v*`）：产出 `wind-installer-windows-x64.exe`、`wind-uninstaller-windows-x64.exe`、`wind-packer-windows-x64.exe`、`wind-packer-linux-x64` 与 `SHA256SUMS`。`workflow_dispatch` 触发时只产 artifact 不发 Release。资产名不带版本号——版本由 tag 表达，下载方写死文件名即可。
 
 门禁强度是**按代码库现状**定的：未启用 `-D warnings`（既有 11 处 clippy 警告）、未加 `cargo fmt --check`（现有代码未按 rustfmt 格式化）。红着的门禁没人会认真看，所以先让它保持绿。清理干净后再收紧，两处都在 `ci.yml` 里留了注释说明怎么改。
+
+## 提交信息
+
+提交信息以及进库的注释与文档**不要**带个人信息：真实姓名、邮箱、内网地址与主机名，
+以及含用户名或个人目录布局的本机路径（如 `/home/<用户名>/…`、`C:\Users\<用户名>\…`、
+`D:\Develop\…`）。引用文件一律写仓库相对路径。
