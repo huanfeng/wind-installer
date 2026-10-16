@@ -12,15 +12,23 @@ pub struct ResolvedVersionInfo {
     pub internal_name: String,
 }
 
-/// 解析版本号字符串为 (major_u32, minor_u32)，分别存储 MS 和 LS 的打包值。
-pub fn parse_version_string(v: &str) -> (u32, u32) {
+/// 版本号的四段数字。语义化版本的预发布 / 构建后缀（`-beta.1`、`+build.5`）不参与：
+/// PE 版本资源只收数字，按点拆会把 `0.127.0-beta.1` 读成 0.127.0.1，反比正式版「新」。
+fn numeric_parts(v: &str) -> [u16; 4] {
+    let core = v.split(['-', '+']).next().unwrap_or("");
     let mut parts = [0u16; 4];
-    for (i, p) in v.split('.').enumerate() {
+    for (i, p) in core.split('.').enumerate() {
         if i >= 4 {
             break;
         }
         parts[i] = p.trim().parse::<u16>().unwrap_or(0);
     }
+    parts
+}
+
+/// 解析版本号字符串为 (major_u32, minor_u32)，分别存储 MS 和 LS 的打包值。
+pub fn parse_version_string(v: &str) -> (u32, u32) {
+    let parts = numeric_parts(v);
     let major = ((parts[0] as u32) << 16) | (parts[1] as u32);
     let minor = ((parts[2] as u32) << 16) | (parts[3] as u32);
     (major, minor)
@@ -28,13 +36,7 @@ pub fn parse_version_string(v: &str) -> (u32, u32) {
 
 /// 将版本字符串自动规范化为 A.B.C.D 格式。
 pub fn format_version_4_parts(v: &str) -> String {
-    let mut parts = [0u16; 4];
-    for (i, p) in v.split('.').enumerate() {
-        if i >= 4 {
-            break;
-        }
-        parts[i] = p.trim().parse::<u16>().unwrap_or(0);
-    }
+    let parts = numeric_parts(v);
     format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], parts[3])
 }
 
@@ -132,6 +134,15 @@ mod tests {
         assert_eq!(format_version_4_parts("1.2.3"), "1.2.3.0");
         assert_eq!(format_version_4_parts("2.5"), "2.5.0.0");
         assert_eq!(format_version_4_parts("1.2.3.4"), "1.2.3.4");
+    }
+
+    /// 预发布后缀不参与数字版本：0.127.0-beta.1 是 0.127.0.0，不能被拆成 0.127.0.1
+    /// （那会比正式版 0.127.0.0 还「新」）。
+    #[test]
+    fn prerelease_suffix_is_not_a_version_part() {
+        assert_eq!(format_version_4_parts("0.127.0-beta.1"), "0.127.0.0");
+        assert_eq!(parse_version_string("0.127.0-beta.1"), (0x0000007f, 0));
+        assert_eq!(format_version_4_parts("1.2.3+build.5"), "1.2.3.0");
     }
 
     /// 从 TOML 解析而非手工构造结构体：版本推导只关心 app 的几个字段，
