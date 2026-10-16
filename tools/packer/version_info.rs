@@ -4,9 +4,9 @@ use wind_installer::manifest::ProjectConfig;
 pub struct ResolvedVersionInfo {
     pub company_name: String,
     pub file_description: String,
-    pub file_version: String, // 格式化后的 4 位字符串，例如 "1.0.0.0"
+    pub file_version: String, // 原样的版本字符串，例如 "0.127.0-beta.1"；数字版本另由 parse_version_string 取
     pub product_name: String,
-    pub product_version: String, // 格式化后的 4 位字符串
+    pub product_version: String, // 同 file_version
     pub copyright: String,
     pub original_filename: String,
     pub internal_name: String,
@@ -34,12 +34,6 @@ pub fn parse_version_string(v: &str) -> (u32, u32) {
     (major, minor)
 }
 
-/// 将版本字符串自动规范化为 A.B.C.D 格式。
-pub fn format_version_4_parts(v: &str) -> String {
-    let parts = numeric_parts(v);
-    format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], parts[3])
-}
-
 /// 根据配置和推导规则解析版本信息属性
 pub fn derive_version_info(cfg: &ProjectConfig, is_uninstaller: bool) -> ResolvedVersionInfo {
     let v_cfg = cfg.package.version_info.as_ref();
@@ -65,7 +59,7 @@ pub fn derive_version_info(cfg: &ProjectConfig, is_uninstaller: bool) -> Resolve
         .and_then(|vi| vi.file_version.as_ref())
         .cloned()
         .unwrap_or_else(|| app.version.clone());
-    let file_version = format_version_4_parts(&raw_file_ver);
+    let file_version = raw_file_ver.trim().to_string();
 
     let product_name = v_cfg
         .and_then(|vi| vi.product_name.as_ref())
@@ -76,7 +70,7 @@ pub fn derive_version_info(cfg: &ProjectConfig, is_uninstaller: bool) -> Resolve
         .and_then(|vi| vi.product_version.as_ref())
         .cloned()
         .unwrap_or_else(|| app.version.clone());
-    let product_version = format_version_4_parts(&raw_prod_ver);
+    let product_version = raw_prod_ver.trim().to_string();
 
     let copyright = v_cfg
         .and_then(|vi| vi.copyright.as_ref())
@@ -129,20 +123,27 @@ mod tests {
         assert_eq!(parse_version_string("invalid"), (0, 0));
     }
 
-    #[test]
-    fn test_format_version() {
-        assert_eq!(format_version_4_parts("1.2.3"), "1.2.3.0");
-        assert_eq!(format_version_4_parts("2.5"), "2.5.0.0");
-        assert_eq!(format_version_4_parts("1.2.3.4"), "1.2.3.4");
-    }
-
     /// 预发布后缀不参与数字版本：0.127.0-beta.1 是 0.127.0.0，不能被拆成 0.127.0.1
     /// （那会比正式版 0.127.0.0 还「新」）。
     #[test]
     fn prerelease_suffix_is_not_a_version_part() {
-        assert_eq!(format_version_4_parts("0.127.0-beta.1"), "0.127.0.0");
         assert_eq!(parse_version_string("0.127.0-beta.1"), (0x0000007f, 0));
-        assert_eq!(format_version_4_parts("1.2.3+build.5"), "1.2.3.0");
+        assert_eq!(
+            parse_version_string("1.2.3+build.5"),
+            (0x00010002, 0x00030000)
+        );
+    }
+
+    /// 字符串版本原样显示，预发布后缀保留，与主程序的版本资源一致。
+    #[test]
+    fn version_strings_keep_prerelease_suffix() {
+        let cfg = ProjectConfig::from_toml_str(
+            &MINIMAL_CONFIG.replace("\"1.2.3\"", "\"0.127.0-beta.1\""),
+        )
+        .expect("解析配置失败");
+        let info = derive_version_info(&cfg, false);
+        assert_eq!(info.file_version, "0.127.0-beta.1");
+        assert_eq!(info.product_version, "0.127.0-beta.1");
     }
 
     /// 从 TOML 解析而非手工构造结构体：版本推导只关心 app 的几个字段，
@@ -168,9 +169,9 @@ source_dir  = "src"
         let info = derive_version_info(&cfg, false);
         assert_eq!(info.company_name, "测试发行商");
         assert_eq!(info.file_description, "测试应用 安装程序");
-        assert_eq!(info.file_version, "1.2.3.0");
+        assert_eq!(info.file_version, "1.2.3");
         assert_eq!(info.product_name, "测试应用");
-        assert_eq!(info.product_version, "1.2.3.0");
+        assert_eq!(info.product_version, "1.2.3");
         assert_eq!(info.copyright, "Copyright (C) 2026 测试发行商");
         assert_eq!(info.original_filename, "test-app-1.2.3.exe");
         assert_eq!(info.internal_name, "test-app");
@@ -179,9 +180,9 @@ source_dir  = "src"
         let uninst_info = derive_version_info(&cfg, true);
         assert_eq!(uninst_info.company_name, "测试发行商");
         assert_eq!(uninst_info.file_description, "测试应用 卸载程序");
-        assert_eq!(uninst_info.file_version, "1.2.3.0");
+        assert_eq!(uninst_info.file_version, "1.2.3");
         assert_eq!(uninst_info.product_name, "测试应用");
-        assert_eq!(uninst_info.product_version, "1.2.3.0");
+        assert_eq!(uninst_info.product_version, "1.2.3");
         assert_eq!(uninst_info.copyright, "Copyright (C) 2026 测试发行商");
         assert_eq!(uninst_info.original_filename, "uninstall.exe");
         assert_eq!(uninst_info.internal_name, "uninstall");
