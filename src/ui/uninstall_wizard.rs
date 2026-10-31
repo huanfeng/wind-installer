@@ -329,7 +329,7 @@ pub fn run_uninstall_wizard() {
                     Element::button("取消")
                         .width(80)
                         .height(42)
-                        .corner(21.0)
+                        .corner(8.0)
                         .on_click(|_ctx: &mut EventCtx| {
                             std::process::exit(0);
                         }),
@@ -593,6 +593,7 @@ pub fn run_uninstall_wizard() {
         .centered()
         .resizable(false)
         .renderer(super::renderer())
+        .theme(super::app_theme())
         .bg(Color::hex(theme::bg_primary()))
         .content(root);
 

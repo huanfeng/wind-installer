@@ -338,6 +338,9 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .child(
                     Element::button("更改")
                         .height(34)
+                        .corner(8.0)
+                        .bg(Color::hex(theme::accent()))
+                        .fg(Color::hex(0xFFFFFF))
                         .visible_when(move || install_mode.get() == 0)
                         .on_click(move |ctx: &mut EventCtx| {
                             ctx.request_pick_folder(
@@ -363,6 +366,9 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .child(
                     Element::button("更改")
                         .height(34)
+                        .corner(8.0)
+                        .bg(Color::hex(theme::accent()))
+                        .fg(Color::hex(0xFFFFFF))
                         .visible_when(move || install_mode.get() == 1)
                         .on_click(move |ctx: &mut EventCtx| {
                             ctx.request_pick_folder(
@@ -405,6 +411,9 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .child(
                     Element::button("更改")
                         .height(34)
+                        .corner(8.0)
+                        .bg(Color::hex(theme::accent()))
+                        .fg(Color::hex(0xFFFFFF))
                         .enabled(is_fresh_install)
                         .visible_when(move || install_mode.get() == 0)
                         .on_click(move |ctx: &mut EventCtx| {
@@ -694,6 +703,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
         .centered()
         .resizable(false)
         .renderer(super::renderer())
+        .theme(super::app_theme())
         .bg(Color::hex(theme::bg_primary()))
         .content(root);
 

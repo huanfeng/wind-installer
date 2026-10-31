@@ -2,7 +2,9 @@ pub mod install_wizard;
 pub mod theme;
 pub mod uninstall_wizard;
 
+use windui::geometry::Color;
 use windui::platform::Renderer;
+use windui::theme::Theme;
 
 /// 无边框模式自绘标题栏的高度。
 pub const TITLE_BAR_H: i32 = 36;
@@ -40,4 +42,16 @@ pub fn renderer() -> Renderer {
     } else {
         Renderer::Auto
     }
+}
+
+/// 向导主题：把清单（或内置默认）的主色铺到 windui 的强调色槽上，
+/// 单选、复选、进度条、主按钮这些吃主题强调色的控件才与手写 `.bg(accent)` 的按钮同色。
+/// 只换强调色三态，其余沿用 windui 默认主题。
+pub fn app_theme() -> Theme {
+    let mut t = Theme::default();
+    t.palette.accent = Color::hex(theme::accent());
+    t.palette.accent_hover = Color::hex(theme::accent_hover());
+    t.palette.accent_active = Color::hex(theme::accent_pressed());
+    t.palette.on_accent = Color::WHITE;
+    t
 }
