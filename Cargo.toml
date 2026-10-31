@@ -39,7 +39,7 @@ indexmap = "2"
 # 后，wind-packer 可在 Linux 宿主原生构建（archive 纯 IO，无需 wine）。
 [target.'cfg(windows)'.dependencies]
 # GUI 框架（ui 模块用；开源仓库：https://github.com/huanfeng/wind-ui-rust）
-windui = "0.20"
+windui = "0.31"
 # Windows API（与 windui 对齐到 0.62）
 windows = { version = "0.62", features = [
     "Win32_Foundation",
