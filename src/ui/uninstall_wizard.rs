@@ -94,12 +94,10 @@ fn note_row(text: String) -> Element {
 const CHECKBOX_LABEL_INDENT: i32 = 26;
 
 pub fn run_uninstall_wizard() {
-    // ---- 运行期窗口尺寸（来自清单；非无边框模式高度 -40 补偿系统标题栏）----
-    let (win_w, base_h) = meta::uninstall_win();
-    let win_h = if cfg!(feature = "frameless") {
-        base_h
-    } else {
-        base_h - 40
+    // ---- 运行期窗口尺寸（来自清单，内容区大小；无边框时加上自绘标题栏高度）----
+    let (win_w, win_h) = {
+        let (w, h) = meta::uninstall_win();
+        super::window_size(w, h)
     };
     let title = format!("{} 卸载程序", meta::app_display_name());
 
@@ -482,7 +480,7 @@ pub fn run_uninstall_wizard() {
         let title_text = title.clone();
         Element::row()
             .width_match()
-            .height(36)
+            .height(super::TITLE_BAR_H)
             .cross(Align::Center)
             .bg(Color::hex(theme::bg_primary()))
             .window_drag()

@@ -205,7 +205,10 @@ fn run_install_plan(
 
 pub fn run_install_wizard(opts: WizardOptions) {
     // ---- 运行期窗口尺寸 / 标题（来自清单）----
-    let (win_w, win_h) = meta::install_win();
+    let (win_w, win_h) = {
+        let (w, h) = meta::install_win();
+        super::window_size(w, h)
+    };
     let title = meta::window_title();
 
     // ---- 状态（Signal<T> 是 Copy 句柄，move 闭包自动复制，无需 clone 样板）----
@@ -653,7 +656,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
     #[cfg(feature = "frameless")]
     let title_bar = Element::row()
         .width_match()
-        .height(36)
+        .height(super::TITLE_BAR_H)
         .cross(Align::Center)
         .bg(Color::hex(theme::bg_primary()))
         .window_drag()

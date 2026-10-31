@@ -4,6 +4,23 @@ pub mod uninstall_wizard;
 
 use windui::platform::Renderer;
 
+/// 无边框模式自绘标题栏的高度。
+pub const TITLE_BAR_H: i32 = 36;
+
+/// 清单里的窗口尺寸 → 向导窗口客户区尺寸。清单尺寸是**内容区**（标题栏之下）的大小。
+///
+/// windui 0.21 起无边框窗口的外框即客户区；此前客户区比请求的大约 +16 × +39（建窗按带框窗口
+/// 反算外框、随后非客户区被消掉），向导的排版是按那份多出来的空间调出来的。现在客户区恰等于
+/// 请求尺寸，标题栏占掉其中 `TITLE_BAR_H`，故无边框时高度要把标题栏加上，否则内容区只剩
+/// `h - TITLE_BAR_H`，页面里靠下的按钮被挤到窗口外。
+pub fn window_size(w: i32, h: i32) -> (i32, i32) {
+    if cfg!(feature = "frameless") {
+        (w, h + TITLE_BAR_H)
+    } else {
+        (w, h)
+    }
+}
+
 /// 向导窗口使用的渲染后端。
 /// 默认 [`Renderer::Auto`]（D2D 硬件加速优先，设备建不起来自动回退软光栅）；
 /// 以下任一条件强制软光栅：
