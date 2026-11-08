@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::installer::receipt::{Receipt, ReceiptEntry};
 use crate::installer::step::{Reporter, Step};
-use crate::installer::{font, ime, process, registry};
+use crate::installer::{firewall, font, ime, process, registry};
 
 use super::cleanup::{self, CleanupOptions};
 
@@ -127,6 +127,9 @@ fn undo(entry: &ReceiptEntry) -> Result<(), String> {
         }
         ReceiptEntry::UninstallInfoWritten { key } => registry::remove_uninstall_key(key),
         ReceiptEntry::DataDirConfWritten { path } => remove_file_if_exists(Path::new(path)),
+        ReceiptEntry::FirewallRuleAdded { name, program } => {
+            firewall::delete_rule(name, program)
+        }
     }
 }
 
@@ -142,6 +145,7 @@ fn describe(entry: &ReceiptEntry) -> String {
         ReceiptEntry::StartMenuFolderCreated { .. } => "删除开始菜单文件夹".into(),
         ReceiptEntry::UninstallInfoWritten { .. } => "移除卸载信息".into(),
         ReceiptEntry::DataDirConfWritten { .. } => "删除数据目录配置".into(),
+        ReceiptEntry::FirewallRuleAdded { name, .. } => format!("删除防火墙规则 {}", name),
     }
 }
 

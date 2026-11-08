@@ -5,13 +5,14 @@
 //!
 //! **有系统副作用的步骤必须把做成的产物写进 `ctx.receipt`**，否则卸载时撤销不掉。
 
-use crate::manifest::{AutoStartInfo, DataDirInfo, ShortcutInfo, StartupInfo};
+use crate::manifest::{AutoStartInfo, DataDirInfo, FirewallInfo, ShortcutInfo, StartupInfo};
 use crate::meta;
 
 use super::receipt::ReceiptEntry;
 use super::step::{InstallCtx, Reporter, Step};
 use super::{
-    acl, font, ime, is_uninstaller_entry, legacy, process, registry, residue, shortcut, userdata,
+    acl, firewall, font, ime, is_uninstaller_entry, legacy, process, registry, residue, shortcut,
+    userdata,
 };
 use super::{InstallMode, UNINSTALLER_NAME};
 
@@ -374,6 +375,35 @@ impl Step<InstallCtx<'_>> for RegisterUrlProtocol {
         }
 
         result
+    }
+}
+
+/// 添加 [[firewall]] 声明的入站放行规则。
+pub struct AddFirewallRules {
+    pub items: Vec<FirewallInfo>,
+}
+
+impl Step<InstallCtx<'_>> for AddFirewallRules {
+    fn name(&self) -> String {
+        "正在配置防火墙...".into()
+    }
+    /// 逐条记账：某条规则失败不影响其余，已添加的必须进回执，否则卸载后规则残留。
+    fn run(&self, ctx: &mut InstallCtx, _r: &mut dyn Reporter) -> Result<(), String> {
+        let mut errors = Vec::new();
+        for rule in &self.items {
+            match firewall::add_rule(rule, &ctx.config.install_dir) {
+                Ok(program) => ctx.receipt.push(ReceiptEntry::FirewallRuleAdded {
+                    name: rule.name.clone(),
+                    program,
+                }),
+                Err(e) => errors.push(e),
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("; "))
+        }
     }
 }
 

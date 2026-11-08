@@ -46,6 +46,8 @@ pub enum ReceiptEntry {
     UninstallInfoWritten { key: String },
     /// 写入的数据目录配置文件（绝对路径）。
     DataDirConfWritten { path: String },
+    /// 添加的防火墙入站规则。`program` 为程序绝对路径（与 `name` 共同定位规则）。
+    FirewallRuleAdded { name: String, program: String },
 }
 
 /// 一次安装产生的全部可撤销产物，按执行先后排列。

@@ -1,5 +1,6 @@
 pub mod acl;
 pub mod config;
+pub mod firewall;
 pub mod font;
 pub mod ime;
 pub mod legacy;

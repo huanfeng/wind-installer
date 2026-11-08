@@ -33,7 +33,8 @@ wind-packer build --config app.toml --stub wind-installer.exe
 | `[ime]` | 跳过 | 注册 TSF 输入法（COM + InstallLayoutOrTip） |
 | `[[font]]` | 跳过 | 安装字体到 `%WINDIR%\Fonts` 并注册 |
 | `[autostart]` | 不注册 | 写 `HKCU\...\Run` |
-| `[[shortcut]]` | 不创建 | 开始菜单或桌面快捷方式 |
+| `[[shortcut]]` | 不创建 | 开始菜单、桌面或“发送到”（`location = "sendto"`）快捷方式，可带 `args` |
+| `[[firewall]]` | 不动 | 按程序添加入站放行规则（`netsh advfirewall`），卸载时按回执删除 |
 | `[startup]` | 装完不启动 | 装完以 `DETACHED_PROCESS` 启动主程序 |
 | `[datadir]` | 不写 | 将向导中选定的数据目录落盘供主程序读取 |
 | `[strings]` | 中性文案 | 覆盖为应用自己的措辞 |

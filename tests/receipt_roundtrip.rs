@@ -44,6 +44,10 @@ fn sample() -> Receipt {
             ReceiptEntry::DataDirConfWritten {
                 path: r"C:\Users\X\AppData\Local\Demo\datadir.conf".into(),
             },
+            ReceiptEntry::FirewallRuleAdded {
+                name: "Demo".into(),
+                program: r"C:\Program Files\Demo\demo.exe".into(),
+            },
         ],
     }
 }

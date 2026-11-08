@@ -127,6 +127,32 @@ fn datadir_conf_is_opt_in() {
 }
 
 #[test]
+fn firewall_is_opt_in() {
+    assert!(!plan_names(MINIMAL, InstallMode::Standard)
+        .iter()
+        .any(|n| n.contains("防火墙")));
+
+    let toml = format!(
+        "{}\n[[firewall]]\nname = \"X\"\nprogram = \"x.exe\"\n",
+        MINIMAL
+    );
+    assert!(plan_names(&toml, InstallMode::Standard)
+        .iter()
+        .any(|n| n.contains("防火墙")));
+}
+
+#[test]
+fn portable_mode_never_touches_firewall() {
+    let toml = format!(
+        "{}\n[[firewall]]\nname = \"X\"\nprogram = \"x.exe\"\n",
+        MINIMAL
+    );
+    assert!(!plan_names(&toml, InstallMode::Portable)
+        .iter()
+        .any(|n| n.contains("防火墙")));
+}
+
+#[test]
 fn ime_residue_sweep_is_opt_in() {
     // 清扫是打包器显式声明的能力：仅有 [ime] 段不会自动挂上清扫步骤——
     // 通用安装器不擅自改注册表。只有 [ime].sweep_residue = true 才入计划。

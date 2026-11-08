@@ -106,7 +106,9 @@ exe     = "demo_app.exe"                  # 留空则回退 app.main_exe
 args    = ""                              # 附加命令行参数
 
 # ── 快捷方式：可多条，缺省即不创建 ────────────────────────────────────────
-#    location = "start_menu"（开始菜单 app.start_menu_folder 子目录）或 "desktop"（公共桌面）
+#    location = "start_menu"（开始菜单 app.start_menu_folder 子目录）、"desktop"（公共桌面）
+#               或 "sendto"（当前用户的“发送到”菜单）
+#    args 为快捷方式命令行参数，缺省为空
 #    name 留空则取 target 去扩展名后的文件名
 [[shortcut]]
 target   = "demo_settings.exe"
@@ -117,6 +119,15 @@ location = "start_menu"
 target   = "uninstall.exe"
 name     = "卸载 示例应用"
 location = "start_menu"
+
+# ── 防火墙入站放行规则：可多条，缺省即不动防火墙（便携模式一律不执行）─────
+#    protocol = "any" | "tcp" | "udp"，缺省 any
+#    profiles 缺省 ["private", "domain"]，可含 "public"
+# [[firewall]]
+# name     = "示例应用"
+# program  = "demo_app.exe"                # 相对安装目录
+# protocol = "any"
+# profiles = ["private", "domain"]
 
 # ── 安装完成后的启动行为：整段缺省即不启动任何程序 ─────────────────────────
 [startup]

@@ -47,6 +47,9 @@ pub struct AppManifest {
     /// 快捷方式。空 = 不创建任何快捷方式。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shortcut: Vec<ShortcutInfo>,
+    /// 入站防火墙放行规则。空 = 不动防火墙。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub firewall: Vec<FirewallInfo>,
     /// 安装完成后的启动行为。整段缺省 = 不启动任何程序。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup: Option<StartupInfo>,
@@ -295,6 +298,9 @@ pub enum ShortcutLocation {
     StartMenu,
     /// 公共桌面。
     Desktop,
+    /// 当前用户的“发送到”菜单（`%APPDATA%\Microsoft\Windows\SendTo`）。
+    #[serde(rename = "sendto")]
+    SendTo,
 }
 
 /// 快捷方式定义。
@@ -311,6 +317,37 @@ pub struct ShortcutInfo {
     /// 快捷方式描述（悬停提示），空则回退到 name。
     #[serde(default)]
     pub description: String,
+    /// 快捷方式的命令行参数，空 = 无参数。
+    #[serde(default)]
+    pub args: String,
+}
+
+/// 防火墙规则协议。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FirewallProtocol {
+    #[default]
+    Any,
+    Tcp,
+    Udp,
+}
+
+/// 入站放行规则：按程序放行，规则名与程序绝对路径共同标识一条规则。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FirewallInfo {
+    /// 规则显示名。
+    pub name: String,
+    /// 放行的程序（相对安装目录）。
+    pub program: String,
+    #[serde(default)]
+    pub protocol: FirewallProtocol,
+    /// 生效的网络配置文件：`private` / `domain` / `public`。
+    #[serde(default = "default_firewall_profiles")]
+    pub profiles: Vec<String>,
+}
+
+fn default_firewall_profiles() -> Vec<String> {
+    vec!["private".into(), "domain".into()]
 }
 
 impl ShortcutInfo {

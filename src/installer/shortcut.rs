@@ -56,6 +56,7 @@ pub fn create_shortcuts(install_dir: &Path, items: &[ShortcutInfo]) -> CreatedSh
             &link_path,
             &install_dir.to_string_lossy(),
             &expand(item.effective_description()),
+            &item.args,
         ) {
             Ok(()) => {
                 if item.location == ShortcutLocation::StartMenu {
@@ -78,12 +79,16 @@ fn create_shortcut(
     link_path: &Path,
     working_dir: &str,
     description: &str,
+    args: &str,
 ) -> Result<(), String> {
     let mut link =
         mslnk::ShellLink::new(target).map_err(|e| format!("无法创建快捷方式对象: {}", e))?;
 
     link.set_working_dir(Some(working_dir.to_string()));
     link.set_name(Some(description.to_string()));
+    if !args.trim().is_empty() {
+        link.set_arguments(Some(args.to_string()));
+    }
 
     link.create_lnk(link_path)
         .map_err(|e| format!("无法保存快捷方式 {:?}: {}", link_path, e))?;
@@ -95,7 +100,17 @@ fn location_dir(loc: ShortcutLocation) -> PathBuf {
     match loc {
         ShortcutLocation::StartMenu => start_menu_dir(),
         ShortcutLocation::Desktop => desktop_dir(),
+        ShortcutLocation::SendTo => sendto_dir(),
     }
+}
+
+/// 当前用户的“发送到”目录。安装器以管理员运行，`%APPDATA%` 指向提权账户的漫游目录。
+fn sendto_dir() -> PathBuf {
+    let appdata = std::env::var("APPDATA").unwrap_or_default();
+    PathBuf::from(appdata)
+        .join("Microsoft")
+        .join("Windows")
+        .join("SendTo")
 }
 
 /// 全局开始菜单下的应用文件夹。

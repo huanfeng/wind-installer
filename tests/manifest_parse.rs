@@ -805,3 +805,38 @@ fn every_allowed_entry_stays_under_the_root_after_join() {
         assert_ne!(joined, root, "{e:?} 放行后 join 就是作用域根本身");
     }
 }
+
+const MIN_APP: &str = r#"
+[app]
+id           = "Demo"
+display_name = "Demo App"
+version      = "1.0.0"
+publisher    = "Demo Inc"
+main_exe     = "demo.exe"
+"#;
+
+#[test]
+fn shortcut_sendto_with_args_parses() {
+    use wind_installer::manifest::ShortcutLocation;
+    let toml = format!(
+        "{}\n[[shortcut]]\ntarget = \"demo.exe\"\nlocation = \"sendto\"\nargs = \"--put\"\n\n[[shortcut]]\ntarget = \"demo.exe\"\n",
+        MIN_APP
+    );
+    let m = AppManifest::from_toml_bytes(toml.as_bytes()).expect("parse");
+    assert_eq!(m.shortcut[0].location, ShortcutLocation::SendTo);
+    assert_eq!(m.shortcut[0].args, "--put");
+    assert_eq!(m.shortcut[1].args, "");
+}
+
+#[test]
+fn firewall_defaults() {
+    use wind_installer::manifest::FirewallProtocol;
+    let toml = format!(
+        "{}\n[[firewall]]\nname = \"X\"\nprogram = \"x.exe\"\n",
+        MIN_APP
+    );
+    let m = AppManifest::from_toml_bytes(toml.as_bytes()).expect("parse");
+    assert_eq!(m.firewall.len(), 1);
+    assert_eq!(m.firewall[0].protocol, FirewallProtocol::Any);
+    assert_eq!(m.firewall[0].profiles, ["private", "domain"]);
+}

@@ -61,6 +61,11 @@ pub fn plan_install<'a>(m: &AppManifest, mode: InstallMode) -> Vec<Box<dyn Step<
     if !m.app.url_protocol.trim().is_empty() {
         plan.push(Box::new(RegisterUrlProtocol));
     }
+    if !m.firewall.is_empty() {
+        plan.push(Box::new(AddFirewallRules {
+            items: m.firewall.clone(),
+        }));
+    }
     if !m.shortcut.is_empty() {
         plan.push(Box::new(CreateShortcuts {
             items: m.shortcut.clone(),
