@@ -16,26 +16,44 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// 幂等：先按名字 + 程序删除同名旧规则，再添加。
 pub fn add_rule(rule: &FirewallInfo, install_dir: &Path) -> Result<String, String> {
     validate(rule)?;
+    // 与 validate 一致，统一使用 trim 后的取值
+    let name = rule.name.trim();
     let program = install_dir
-        .join(&rule.program)
+        .join(rule.program.trim())
         .to_string_lossy()
         .to_string();
-    let args = build_add_args(rule, &program)?;
+    let mut trimmed = rule.clone();
+    trimmed.name = name.to_string();
+    let args = build_add_args(&trimmed, &program)?;
 
-    delete_rule(&rule.name, &program)?;
+    delete_rule(name, &program)?;
     run_netsh(&args)?;
     Ok(program)
 }
 
 /// 删除名字与程序都匹配的规则。没有匹配的规则视为成功（已被用户或上次卸载删掉）。
 ///
-/// 先 `show rule` 判断是否存在，而不是解析 delete 的输出：输出文案随系统语言变化，
-/// 退出码才是稳定信号（show 在无匹配时返回非零）。
+/// `show rule` 不接受 `program=`，只能按名字查：非零退出码 = 该名下没有规则；
+/// 退出码为零时再在 verbose 输出里找程序路径，匹配才执行 delete。
+/// 不解析输出文案（随系统语言变化），只做路径字面量包含判断。
 pub fn delete_rule(name: &str, program_abs: &str) -> Result<(), String> {
-    if run_netsh(&build_show_args(name, program_abs)).is_err() {
+    let (code, stdout) = run_netsh_output(&build_show_args(name))?;
+    if code != 0 || !rule_matches_program(&stdout, program_abs) {
         return Ok(());
     }
     run_netsh(&build_delete_args(name, program_abs))
+}
+
+/// verbose 输出里是否出现目标程序路径（不区分大小写）。
+///
+/// netsh 按系统 OEM 代码页输出，而这里按 UTF-8 宽松解码：路径含非 ASCII 字符时
+/// 字面量比较不可靠，此时只要 show 成功（该名下有规则）就视为匹配，由随后的
+/// delete 按 name + program 精确定位。
+fn rule_matches_program(stdout: &str, program_abs: &str) -> bool {
+    if !program_abs.is_ascii() {
+        return true;
+    }
+    stdout.to_lowercase().contains(&program_abs.to_lowercase())
 }
 
 /// 入口校验：规则名与程序路径来自清单，不得用来误删全部规则或逃出安装目录。
@@ -82,14 +100,14 @@ fn build_delete_args(name: &str, program_abs: &str) -> Vec<String> {
     ]
 }
 
-fn build_show_args(name: &str, program_abs: &str) -> Vec<String> {
+fn build_show_args(name: &str) -> Vec<String> {
     vec![
         "advfirewall".into(),
         "firewall".into(),
         "show".into(),
         "rule".into(),
         format!("name={}", name),
-        format!("program={}", program_abs),
+        "verbose".into(),
     ]
 }
 
@@ -124,25 +142,26 @@ fn netsh_path() -> PathBuf {
     PathBuf::from(root).join("System32").join("netsh.exe")
 }
 
-fn run_netsh(args: &[String]) -> Result<(), String> {
+/// 运行 netsh，返回（退出码，stdout）。仅在无法启动进程时报错。
+fn run_netsh_output(args: &[String]) -> Result<(i32, String), String> {
     let output = Command::new(netsh_path())
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("Failed to run netsh: {}", e))?;
+    Ok((
+        output.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&output.stdout).to_string(),
+    ))
+}
 
-    if output.status.success() {
+fn run_netsh(args: &[String]) -> Result<(), String> {
+    let (code, stdout) = run_netsh_output(args)?;
+    if code == 0 {
         return Ok(());
     }
     // netsh 把错误信息写在 stdout
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(format!(
-        "netsh failed ({}): {} {}",
-        output.status,
-        stdout.trim(),
-        stderr.trim()
-    ))
+    Err(format!("netsh failed ({}): {}", code, stdout.trim()))
 }
 
 #[cfg(test)]
@@ -176,6 +195,51 @@ mod tests {
                 "enable=yes",
                 "profile=private,public",
                 "protocol=tcp",
+            ]
+        );
+    }
+
+    const EN_OUT: &str = "Rule Name:                            Demo\r\n\
+Enabled:                              Yes\r\n\
+Direction:                            In\r\n\
+Program:                              C:\\Program Files\\Demo\\demo.exe\r\n\
+Action:                               Allow\r\n";
+    const ZH_OUT: &str = "规则名称:                              Demo\r\n\
+已启用:                                是\r\n\
+方向:                                  入站\r\n\
+程序:                                  c:\\program files\\demo\\demo.exe\r\n\
+操作:                                  允许\r\n";
+
+    #[test]
+    fn rule_match_is_case_insensitive_and_language_independent() {
+        let p = r"C:\Program Files\Demo\demo.exe";
+        assert!(rule_matches_program(EN_OUT, p));
+        assert!(rule_matches_program(ZH_OUT, p));
+    }
+
+    #[test]
+    fn rule_match_rejects_other_programs() {
+        let p = r"C:\Program Files\Other\demo.exe";
+        assert!(!rule_matches_program(EN_OUT, p));
+        assert!(!rule_matches_program(ZH_OUT, p));
+    }
+
+    #[test]
+    fn non_ascii_program_falls_back_to_name_match() {
+        assert!(rule_matches_program(EN_OUT, r"C:\安装\demo.exe"));
+    }
+
+    #[test]
+    fn show_args_have_no_program() {
+        assert_eq!(
+            build_show_args("My App"),
+            [
+                "advfirewall",
+                "firewall",
+                "show",
+                "rule",
+                "name=My App",
+                "verbose"
             ]
         );
     }
