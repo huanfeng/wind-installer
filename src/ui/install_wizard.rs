@@ -217,14 +217,16 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // 直接跳到进度页会让用户来不及看清"在装什么、装到哪"，观感上像是窗口闪了一下。
     let current_page = signal(PAGE_CONFIG);
     let install_mode = signal(0usize);
-    let install_dir = signal(
-        opts.install_dir
+    // 输入框里显示展开后的实际路径（`%APPDATA%` 这类写法普通用户看不懂）；安装时用的是同一次展开。
+    let install_dir = signal(display_path(
+        &opts
+            .install_dir
             .as_ref()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(default_install_dir),
-    );
-    let install_dir_portable = signal(default_portable_dir());
-    let data_dir = signal(default_data_dir());
+    ));
+    let install_dir_portable = signal(display_path(&default_portable_dir()));
+    let data_dir = signal(display_path(&default_data_dir()));
     let progress_text = signal(String::from("正在准备安装..."));
     let progress_value = signal(0.0f32);
     let finish_success = signal(false);
@@ -769,22 +771,14 @@ pub fn default_data_dir() -> String {
     crate::meta::default_data_path()
 }
 
-/// 展开路径中的 %VAR% 环境变量占位符。
+/// 展开路径中的 %VAR% 环境变量占位符（安装时用）。
 fn expand_env_path(s: &str) -> std::path::PathBuf {
-    let mut result = s.to_string();
-    for (var, fallback) in &[
-        ("ProgramFiles", r"C:\Program Files"),
-        ("APPDATA", r"C:\Users\Default\AppData\Roaming"),
-        ("LOCALAPPDATA", r"C:\Users\Default\AppData\Local"),
-        ("USERPROFILE", r"C:\Users\Default"),
-    ] {
-        let token = format!("%{}%", var);
-        if result.contains(&token) {
-            let val = std::env::var(var).unwrap_or_else(|_| fallback.to_string());
-            result = result.replace(&token, &val);
-        }
-    }
-    std::path::PathBuf::from(result)
+    std::path::PathBuf::from(display_path(s))
+}
+
+/// 界面显示用：同一套展开（见 [`crate::util::path::expand_env_vars`]）。`pub` 供集成测试钉住界面值。
+pub fn display_path(s: &str) -> String {
+    crate::util::path::expand_env_vars(s)
 }
 
 /// 构建选目录用的 `PickDialog`：起始目录取当前配置路径（`%VAR%` 展开后）最近的

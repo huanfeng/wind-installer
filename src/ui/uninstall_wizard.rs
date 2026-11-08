@@ -70,9 +70,10 @@ pub fn state_files_clause() -> String {
     if files.is_empty() {
         return String::new();
     }
+    // 显示卸载实际清理的目录（展开后的真实路径），不是 `%LOCALAPPDATA%` 写法
     format!(
-        "%LOCALAPPDATA%\\{} 下的 {}",
-        meta::app_id(),
+        "{} 下的 {}",
+        crate::uninstaller::cleanup::local_data_dir().display(),
         files.join("、")
     )
 }
@@ -167,7 +168,7 @@ pub fn run_uninstall_wizard() {
     // 这两串说明**由同一份清单生成**，不是另写一遍：界面上说会删什么、卸载就删什么，
     // 是 AGENTS.md 规则 5 的要求——用户是照着这行字按下不可逆按钮的。清单没声明
     // [localdata] 时两串都是空，缓存勾选整行也不显示（勾了什么都不做比没有更糟）。
-    let local_root = format!("%LOCALAPPDATA%\\{}", meta::app_id());
+    let local_root = crate::uninstaller::cleanup::local_data_dir().display().to_string();
     let cache_dirs: &[String] = meta::localdata().map_or(&[], |l| l.cache_dirs.as_slice());
     let has_cache_entries = !cache_dirs.is_empty();
     // 勾选行附注与确认弹窗都从 state_files_clause() 取，不各写一遍——见该函数文档。

@@ -46,6 +46,12 @@ fn data_dir_initial_value_follows_conf_file() {
     // 首装（conf 尚不存在）→ 清单默认模板
     let _ = std::fs::remove_file(&conf);
     assert_eq!(install_wizard::default_data_dir(), r"%APPDATA%\Demo");
+    // 输入框里显示的是展开后的实际路径，不是 `%APPDATA%` 写法
+    let appdata = std::env::var("APPDATA").expect("测试环境应有 APPDATA");
+    assert_eq!(
+        install_wizard::display_path(&install_wizard::default_data_dir()),
+        format!(r"{appdata}\Demo")
+    );
 
     // 二次安装：conf 已记录用户当初选的目录 → 界面必须显示它，而不是默认模板
     std::fs::write(&conf, r"D:\MyData\Demo").expect("写 conf 失败");
@@ -100,4 +106,5 @@ fn delete_confirmation_text_covers_every_state_file() {
         clause.contains("Demo"),
         "文案要说清是哪个目录下的: {clause}"
     );
+    assert!(!clause.contains('%'), "不显示 %LOCALAPPDATA% 这类写法: {clause}");
 }
