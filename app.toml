@@ -55,6 +55,10 @@ accent = "#4C8BF5"
 install  = '%ProgramFiles%\{id}'
 portable = '%USERPROFILE%\{id}'
 data     = '%APPDATA%\{id}'
+# 卸载时「删除用户数据」要删的目录；缺省沿用 %APPDATA%\{id}。数据目录不在那里的应用才需要。
+# 必须以 %APPDATA%\ 或 %LOCALAPPDATA%\ 开头、其下至少一级目录，不含 ..、盘符与其他变量；{id} 可用。
+# 清单声明了 [datadir] 且本机已有 conf 时，以 conf 记录的目录为准。
+# user_data = '%APPDATA%\Demo Inc\DemoApp'
 
 # ── 可覆盖文案：只收录会泄漏应用领域的文案，留空即用中性默认 ────────────────
 #    内置默认是领域中性的，故多数应用无需配置本段；只有当你的应用对这些东西有

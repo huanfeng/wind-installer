@@ -181,6 +181,14 @@ pub struct PathsInfo {
     /// 用户数据默认目录。
     #[serde(default = "default_data_path")]
     pub data: String,
+    /// 卸载时「删除用户数据」要删除的目录模板，缺省空 = 沿用 `%APPDATA%\{id}`。
+    ///
+    /// 给数据目录不在 `%APPDATA%\{id}` 的应用用（例如 `%APPDATA%\厂商\应用`）。
+    /// 必须以 `%APPDATA%\` 或 `%LOCALAPPDATA%\` 开头、其后至少一级目录，且不含 `..`、
+    /// 盘符、其他 `%VAR%`；`{id}` 展开为 app.id。校验规则见 [`resolve_user_data_template`]。
+    /// 清单声明了 `[datadir]` 且本机已有 conf 时，以 conf 记录的目录为准。
+    #[serde(default)]
+    pub user_data: String,
 }
 
 impl Default for PathsInfo {
@@ -189,6 +197,7 @@ impl Default for PathsInfo {
             install: default_install_path(),
             portable: default_portable_path(),
             data: default_data_path(),
+            user_data: String::new(),
         }
     }
 }
@@ -495,6 +504,46 @@ fn resolve_local_data_entry(entry: &str) -> Result<PathBuf, LocalDataRejection> 
     Ok(parts.iter().collect())
 }
 
+/// `[paths].user_data` 的根：只允许这两个环境变量目录。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserDataRoot {
+    AppData,
+    LocalAppData,
+}
+
+/// 解析 `[paths].user_data`（`{id}` 已展开）为 (根, 相对路径)，同时完成全部校验。
+///
+/// 打包期（[`AppManifest::validate`]）与运行期（卸载器）共用这一个函数，被校验的就是
+/// 被使用的那份值。规则：必须以 `%APPDATA%\` / `%LOCALAPPDATA%\`（大小写不敏感）开头；
+/// 相对部分至少一级，且逐分量通过与 `[localdata]` 条目相同的检查（无 `..`、盘符、
+/// 尾部点/空格、归一化后指回根）；不得含其他 `%` 变量。因此展开后必为绝对路径、
+/// 位于两个根之下、不等于根本身。
+pub fn resolve_user_data_template(tpl: &str) -> Result<(UserDataRoot, PathBuf), String> {
+    let t = tpl.trim().replace('\\', "/");
+    let lower = t.to_ascii_lowercase();
+    let (root, rel) = if lower.starts_with("%appdata%/") {
+        (UserDataRoot::AppData, &t["%appdata%/".len()..])
+    } else if lower.starts_with("%localappdata%/") {
+        (UserDataRoot::LocalAppData, &t["%localappdata%/".len()..])
+    } else {
+        return Err("必须以 %APPDATA%\\ 或 %LOCALAPPDATA%\\ 开头".to_string());
+    };
+    if rel.contains('%') {
+        return Err("根之后不得再含 %VAR% 变量".to_string());
+    }
+    match resolve_local_data_entry(rel) {
+        Ok(path) => Ok((root, path)),
+        Err(LocalDataRejection::ResolvesToRoot) => {
+            Err("不得是 %APPDATA% / %LOCALAPPDATA% 本身，请写出其下的具体目录".to_string())
+        }
+        Err(LocalDataRejection::EscapesLocalDir) => Err("不得含 `..`".to_string()),
+        Err(LocalDataRejection::NotRelative) => Err("路径分量不得带盘符或路径前缀".to_string()),
+        Err(LocalDataRejection::TrailingDotOrSpace) => {
+            Err("路径分量不得以点或空格结尾".to_string())
+        }
+    }
+}
+
 /// 判定一个 `[localdata]` 条目该不该被拒。`None` 即安全。
 pub fn classify_local_data_entry(entry: &str) -> Option<LocalDataRejection> {
     resolve_local_data_entry(entry).err()
@@ -747,6 +796,13 @@ impl AppManifest {
                     bad
                 ),
             });
+        }
+
+        // [paths].user_data：下游动作是 remove_dir_all，打包期就拦住越界写法。
+        if let Some(tpl) = non_empty(&self.paths.user_data) {
+            resolve_user_data_template(&tpl.replace("{id}", &self.app.id)).map_err(|why| {
+                format!("[paths].user_data {:?} 无效：{}", self.paths.user_data, why)
+            })?;
         }
 
         // [localdata] 的两组条目：作用域根是 %LOCALAPPDATA%\{app.id}，下游动作是

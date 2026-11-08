@@ -840,3 +840,88 @@ fn firewall_defaults() {
     assert_eq!(m.firewall[0].protocol, FirewallProtocol::Any);
     assert_eq!(m.firewall[0].profiles, ["private", "domain"]);
 }
+
+const MINIMAL_WITH_USER_DATA: &str = r#"
+[app]
+id           = "Demo"
+display_name = "Demo"
+version      = "1.0.0"
+publisher    = "Demo"
+main_exe     = "demo.exe"
+
+[paths]
+user_data = '%USERPROFILE%\x'
+
+[package]
+source_dir = "."
+"#;
+
+fn project_with_user_data(value: &str) -> Result<ProjectConfig, String> {
+    // 用 TOML 字面量字符串（单引号）避免反斜杠转义
+    let text = MINIMAL_WITH_USER_DATA.replace(r"%USERPROFILE%\x", value);
+    ProjectConfig::from_toml_str(&text)
+}
+
+#[test]
+fn user_data_defaults_to_empty() {
+    let cfg = ProjectConfig::from_toml_str(SAMPLE).expect("解析 app.toml 失败");
+    assert!(cfg.manifest.paths.user_data.is_empty());
+}
+
+#[test]
+fn user_data_valid_templates_parse_and_resolve() {
+    use std::path::PathBuf;
+    use wind_installer::manifest::{resolve_user_data_template, UserDataRoot};
+
+    let cfg = project_with_user_data(r"%APPDATA%\vendor\{id}\data").expect("合法模板被拒");
+    assert_eq!(cfg.manifest.paths.user_data, r"%APPDATA%\vendor\{id}\data");
+
+    // 根大小写不敏感，正斜杠与反斜杠等价，多余分隔符被归一化
+    for (tpl, root, rel) in [
+        (
+            r"%APPDATA%\lanmsg\LanMsg",
+            UserDataRoot::AppData,
+            "lanmsg/LanMsg",
+        ),
+        (
+            r"%appdata%/lanmsg/LanMsg/",
+            UserDataRoot::AppData,
+            "lanmsg/LanMsg",
+        ),
+        (
+            r"%LocalAppData%\Demo\cache",
+            UserDataRoot::LocalAppData,
+            "Demo/cache",
+        ),
+    ] {
+        let (r, p) = resolve_user_data_template(tpl).unwrap_or_else(|e| panic!("{tpl}: {e}"));
+        assert_eq!(r, root, "{tpl}");
+        assert_eq!(p, PathBuf::from(rel), "{tpl}");
+    }
+}
+
+#[test]
+fn user_data_unsafe_templates_are_rejected() {
+    for bad in [
+        r"%APPDATA%",                     // 根本身
+        r"%APPDATA%\",                    // 根本身（尾分隔符）
+        r"%LOCALAPPDATA%\.",              // 归一化后仍是根
+        r"%APPDATA%\...",                 // Win32 剥掉点后指回根
+        r"%APPDATA%\..\Other",            // 走出根
+        r"%APPDATA%\a\..",                // 走出子目录
+        r"%APPDATA%\C:\x",                // 带盘符的分量
+        r"%APPDATA%\x.",                  // 尾部点
+        r"%APPDATA%\%TEMP%\x",            // 其他变量
+        r"%USERPROFILE%\x",               // 不在允许的根下
+        r"%ProgramFiles%\x",              // 不在允许的根下
+        r"C:\Users\me\AppData\Roaming\x", // 绝对路径但不是变量根
+        r"relative\path",                 // 相对路径
+        r"\\server\share\x",              // UNC
+        r"%APPDATA%x",                    // 变量后没有分隔符
+    ] {
+        assert!(
+            project_with_user_data(bad).is_err(),
+            "应当拒绝 user_data = {bad:?}"
+        );
+    }
+}

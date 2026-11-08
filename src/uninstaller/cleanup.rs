@@ -123,13 +123,41 @@ pub fn resolve_user_data_dir() -> PathBuf {
         return dir;
     }
 
+    // 清单声明了 [paths].user_data：用它（与打包期校验同一个解析函数；运行期校验不过
+    // 一律忽略，退回默认位置，不会因为一份坏清单把删除目标指到别处）
+    if let Some(dir) = user_data_override() {
+        return dir;
+    }
+
     // 清单未声明 [datadir] 段、或配置文件缺失/为空 —— 用默认位置
-    let app_data = std::env::var("APPDATA").unwrap_or_else(|_| {
+    PathBuf::from(roaming_app_data()).join(meta::app_id())
+}
+
+/// `%APPDATA%`，取不到时按 `%USERPROFILE%\AppData\Roaming` 兜底。
+fn roaming_app_data() -> String {
+    std::env::var("APPDATA").unwrap_or_else(|_| {
         let mut p = PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default());
         p.push("AppData\\Roaming");
         p.to_string_lossy().to_string()
-    });
-    PathBuf::from(app_data).join(meta::app_id())
+    })
+}
+
+/// 清单 `[paths].user_data` 解析出的目录；未声明或不合法为 `None`。
+fn user_data_override() -> Option<PathBuf> {
+    let tpl = meta::manifest().paths.user_data.trim();
+    if tpl.is_empty() {
+        return None;
+    }
+    let (root, rel) =
+        crate::manifest::resolve_user_data_template(&tpl.replace("{id}", meta::app_id())).ok()?;
+    let base = match root {
+        crate::manifest::UserDataRoot::AppData => PathBuf::from(roaming_app_data()),
+        crate::manifest::UserDataRoot::LocalAppData => local_data_dir()
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default(),
+    };
+    Some(base.join(rel))
 }
 
 impl CleanupOptions {
