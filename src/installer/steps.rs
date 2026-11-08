@@ -391,7 +391,9 @@ impl Step<InstallCtx<'_>> for AddFirewallRules {
     fn run(&self, ctx: &mut InstallCtx, _r: &mut dyn Reporter) -> Result<(), String> {
         let mut errors = Vec::new();
         for rule in &self.items {
-            match firewall::add_rule(rule, &ctx.config.install_dir) {
+            let mut rule = rule.clone();
+            rule.program = meta::expand(&rule.program);
+            match firewall::add_rule(&rule, &ctx.config.install_dir) {
                 Ok(program) => ctx.receipt.push(ReceiptEntry::FirewallRuleAdded {
                     name: rule.name.clone(),
                     program,

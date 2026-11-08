@@ -89,6 +89,11 @@ pub fn main_exe() -> &'static str {
 pub fn setting_exe() -> &'static str {
     &manifest().app.setting_exe
 }
+/// 展开清单占位符（`{main_exe}` 等），快捷方式与防火墙规则共用。
+pub fn expand(s: &str) -> String {
+    crate::manifest::expand_placeholders(s, main_exe(), setting_exe(), app_display_name(), app_id())
+}
+
 pub fn url_protocol() -> &'static str {
     &manifest().app.url_protocol
 }

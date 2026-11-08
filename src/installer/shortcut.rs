@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::manifest::{expand_placeholders, ShortcutInfo, ShortcutLocation};
+use crate::manifest::{ShortcutInfo, ShortcutLocation};
 use crate::meta;
 
 /// `create_shortcuts` 实际创建了什么 + 失败信息。
@@ -22,14 +22,7 @@ pub struct CreatedShortcuts {
 pub fn create_shortcuts(install_dir: &Path, items: &[ShortcutInfo]) -> CreatedShortcuts {
     let mut created = CreatedShortcuts::default();
 
-    // 占位符替换值（使能力段配置对 dev/release 等变体通用）
-    let (main_exe, setting_exe, display, app_id) = (
-        meta::main_exe(),
-        meta::setting_exe(),
-        meta::app_display_name(),
-        meta::app_id(),
-    );
-    let expand = |s: &str| expand_placeholders(s, main_exe, setting_exe, display, app_id);
+    let expand = meta::expand;
 
     for item in items {
         // {setting_exe} 在未配置设置程序时展开为空 → 跳过该快捷方式

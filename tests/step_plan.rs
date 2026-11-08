@@ -52,6 +52,10 @@ source_rel   = "data/Demo.ttf"
 [autostart]
 exe = "demo.exe"
 
+[[firewall]]
+name    = "Demo"
+program = "demo.exe"
+
 [[shortcut]]
 target = "demo.exe"
 
@@ -142,6 +146,14 @@ fn firewall_is_opt_in() {
 }
 
 #[test]
+fn firewall_runs_after_extract_and_before_shortcuts() {
+    let names = plan_names(FULL, InstallMode::Standard);
+    let at = |k: &str| names.iter().position(|n| n.contains(k)).unwrap();
+    assert!(at("释放文件") < at("防火墙"));
+    assert!(at("防火墙") < at("快捷方式"));
+}
+
+#[test]
 fn portable_mode_never_touches_firewall() {
     let toml = format!(
         "{}\n[[firewall]]\nname = \"X\"\nprogram = \"x.exe\"\n",
@@ -189,6 +201,7 @@ fn full_manifest_plans_every_capability_in_order() {
             "正在注册系统输入法...",
             "正在配置开机自启动...",
             "正在注册协议...",
+            "正在配置防火墙...",
             "正在创建快捷方式...",
             "正在写入卸载信息...",
             "正在写入数据目录配置...",
@@ -211,6 +224,7 @@ fn receipt_persists_after_every_side_effecting_step() {
         "输入法",
         "自启动",
         "协议",
+        "防火墙",
         "快捷方式",
         "卸载信息",
         "数据目录",
