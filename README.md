@@ -37,6 +37,7 @@ wind-packer build --config app.toml --stub wind-installer.exe
 | `[[firewall]]` | 不动 | 按程序添加入站放行规则（`netsh advfirewall`），卸载时按回执删除 |
 | `[startup]` | 装完不启动 | 装完以 `DETACHED_PROCESS` 启动主程序 |
 | `[datadir]` | 不写 | 将向导中选定的数据目录落盘供主程序读取 |
+| `[paths] user_data` | 卸载“删除用户数据”删 `%APPDATA%\{id}` | 改删指定目录；须以 `%APPDATA%\` 或 `%LOCALAPPDATA%\` 开头、其下至少一级，不含 `..`、盘符与其他变量；`[datadir]` 已记录目录时以记录为准 |
 | `[strings]` | 中性文案 | 覆盖为应用自己的措辞 |
 
 只声明 `[app]` 段的应用，安装过程只做解压和写入卸载信息，不改动系统其他位置。修改注册表的行为都需要在清单中显式开启。

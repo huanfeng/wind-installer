@@ -152,10 +152,7 @@ fn user_data_override() -> Option<PathBuf> {
         crate::manifest::resolve_user_data_template(&tpl.replace("{id}", meta::app_id())).ok()?;
     let base = match root {
         crate::manifest::UserDataRoot::AppData => PathBuf::from(roaming_app_data()),
-        crate::manifest::UserDataRoot::LocalAppData => local_data_dir()
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_default(),
+        crate::manifest::UserDataRoot::LocalAppData => PathBuf::from(local_app_data()),
     };
     Some(base.join(rel))
 }
@@ -180,12 +177,16 @@ impl CleanupOptions {
 /// `"cache"` 长得像通用词、不像产品名，所以躲过了 `defaults_are_domain_neutral` 那条
 /// 领域中性测试。判据应当是「换一个应用它还成立吗」，而不是「它看着像不像产品名」。
 pub fn local_data_dir() -> PathBuf {
-    let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| {
+    PathBuf::from(local_app_data()).join(meta::app_id())
+}
+
+/// `%LOCALAPPDATA%`，取不到时按 `%USERPROFILE%\AppData\Local` 兜底。
+fn local_app_data() -> String {
+    std::env::var("LOCALAPPDATA").unwrap_or_else(|_| {
         let mut p = PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default());
         p.push("AppData\\Local");
         p.to_string_lossy().to_string()
-    });
-    PathBuf::from(local_app_data).join(meta::app_id())
+    })
 }
 
 // ── 用户数据目录删除守卫 ─────────────────────────────────────────────────────
