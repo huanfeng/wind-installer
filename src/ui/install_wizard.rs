@@ -493,8 +493,6 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .enabled_signal(agreed)
                 .on_click(move |_ctx: &mut EventCtx| {
                     config_error.set(String::new());
-                    progress_value.set(0.0);
-                    current_page.set(PAGE_PROGRESS);
 
                     let install_dir_val = if install_mode.get() == 0 {
                         expand_env_path(&install_dir.get())
@@ -502,6 +500,18 @@ pub fn run_install_wizard(opts: WizardOptions) {
                         expand_env_path(&install_dir_portable.get())
                     };
                     let data_dir_val = expand_env_path(&data_dir.get());
+                    // 二次安装的数据目录是只读展示、沿用已有的，改不了，拦了只会卡死升级；便携不用它
+                    if is_fresh_install && install_mode.get() == 0 {
+                        if let Some(why) = crate::path_conflict::data_dir_conflict(
+                            &install_dir_val.to_string_lossy(),
+                            &data_dir_val.to_string_lossy(),
+                        ) {
+                            config_error.set(why);
+                            return;
+                        }
+                    }
+                    progress_value.set(0.0);
+                    current_page.set(PAGE_PROGRESS);
                     let mode = if install_mode.get() == 0 {
                         InstallMode::Standard
                     } else {

@@ -63,43 +63,4 @@ impl InstallConfig {
         }
         &self.data_dir
     }
-
-    /// 验证数据目录是否有效
-    pub fn validate_data_dir(&self, dir: &PathBuf) -> Result<(), String> {
-        // 不能为空
-        if dir.as_os_str().is_empty() {
-            return Err("数据目录路径不能为空".into());
-        }
-
-        // 必须是绝对路径
-        let dir_str = dir.to_string_lossy();
-        if !dir_str.contains(':') {
-            return Err("必须是绝对路径（如 D:\\WindData）".into());
-        }
-
-        // 不能是安装目录
-        if dir == &self.install_dir {
-            return Err("不能使用应用安装目录作为数据目录".into());
-        }
-
-        // 不能是安装目录的 data 子目录
-        if dir == &self.install_dir.join("data") {
-            return Err("不能使用应用安装目录的 data 目录".into());
-        }
-
-        // 不能是 Windows 系统目录
-        let windir = std::env::var("WINDIR").unwrap_or_default();
-        if dir_str.starts_with(&windir) {
-            return Err("不能使用 Windows 系统目录".into());
-        }
-
-        // 不能在 Program Files 下
-        let program_files = std::env::var("ProgramFiles").unwrap_or_default();
-        let program_files_x86 = std::env::var("ProgramFiles(x86)").unwrap_or_default();
-        if dir_str.starts_with(&program_files) || dir_str.starts_with(&program_files_x86) {
-            return Err("不能使用系统程序目录".into());
-        }
-
-        Ok(())
-    }
 }

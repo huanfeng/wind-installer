@@ -2,6 +2,7 @@
 pub mod archive;
 pub mod manifest;
 pub mod meta;
+pub mod path_conflict;
 
 // installer/uninstaller/ui/util 依赖 windows/winreg/mslnk，仅 Windows 构建。
 #[cfg(windows)]
