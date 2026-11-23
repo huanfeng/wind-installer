@@ -80,6 +80,9 @@ pub struct AppInfo {
     /// 设置程序可执行文件名（相对安装目录），可空。
     #[serde(default)]
     pub setting_exe: String,
+    /// 便携启动器可执行文件名（相对安装目录），可空；便携安装完成页据此提供「打开启动器」。
+    #[serde(default)]
+    pub launcher_exe: String,
     /// 开始菜单文件夹名，空则回退到 display_name。
     #[serde(default)]
     pub start_menu_folder: String,

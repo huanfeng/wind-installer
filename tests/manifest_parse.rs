@@ -937,3 +937,18 @@ fn owned_entries_defaults_empty_and_roundtrips() {
     let back = AppManifest::from_toml_bytes(&m.to_toml_bytes().unwrap()).unwrap();
     assert_eq!(back.app.owned_entries, ["data", "demo_app.exe"]);
 }
+
+/// `launcher_exe` 缺省为空（完成页不提供「打开启动器」），声明后原样读出。
+#[test]
+fn launcher_exe_defaults_empty_and_parses() {
+    let cfg = ProjectConfig::from_toml_str(SAMPLE).unwrap();
+    assert!(cfg.manifest.app.launcher_exe.is_empty());
+
+    let with = SAMPLE.replacen(
+        "setting_exe     = \"demo_settings.exe\"",
+        "setting_exe     = \"demo_settings.exe\"\nlauncher_exe    = \"demo_portable.exe\"",
+        1,
+    );
+    let cfg = ProjectConfig::from_toml_str(&with).unwrap();
+    assert_eq!(cfg.manifest.app.launcher_exe, "demo_portable.exe");
+}

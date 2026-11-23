@@ -86,6 +86,9 @@ pub fn app_publisher() -> &'static str {
 pub fn main_exe() -> &'static str {
     &manifest().app.main_exe
 }
+pub fn launcher_exe() -> &'static str {
+    &manifest().app.launcher_exe
+}
 pub fn setting_exe() -> &'static str {
     &manifest().app.setting_exe
 }

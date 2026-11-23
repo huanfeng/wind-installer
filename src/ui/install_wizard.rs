@@ -240,6 +240,8 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // 且 quiet 模式据此放弃自动退出（见下方 channel 处理）。
     let finish_reboot = signal(false);
     let config_error = signal(String::new());
+    // 完成页「完成后打开设置/启动器」勾选；默认值在安装结束时按模式与是否首装决定
+    let launch_after = signal(false);
     // 已提示过「目录非空」并等待确认的路径
     let nonempty_confirmed = signal(String::new());
     let agreed = signal(false);
@@ -269,6 +271,8 @@ pub fn run_install_wizard(opts: WizardOptions) {
             if !ok {
                 finish_error.set(detail);
             }
+            // 便携装完默认打开启动器；标准安装仅首次安装默认打开设置，升级不打扰
+            launch_after.set(ok && (install_mode.get() == 1 || is_fresh_install));
             current_page.set(PAGE_FINISH);
             // quiet 模式装完自动退出：先切到完成页停留片刻再关，用户能看到"装完了"
             // 而不是窗口凭空消失。
@@ -278,8 +282,20 @@ pub fn run_install_wizard(opts: WizardOptions) {
             // - 需重启：这是唯一告知用户「还有一步要做」的时机。自动升级本就发生在
             //   用户没盯着屏幕的时候，2 秒后自弹自灭等于把提示扔了。
             if quiet && ok && !need_reboot {
-                std::thread::spawn(|| {
+                let target = if launch_after.get() {
+                    launch_target(
+                        install_mode.get() == 1,
+                        &install_dir.get(),
+                        &install_dir_portable.get(),
+                    )
+                } else {
+                    None
+                };
+                std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(QUIET_FINISH_MS));
+                    if let Some((dir, exe)) = target {
+                        let _ = crate::installer::process::prestart_app(&dir, exe);
+                    }
                     std::process::exit(0);
                 });
             }
@@ -685,6 +701,24 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 ),
         )
         .child(Element::leaf().weight(1.0))
+        // 完成后打开设置 / 启动器（清单没声明对应程序时不显示）
+        .child(
+            Element::col()
+                .width_match()
+                .cross(Align::Center)
+                .visible_when(move || finish_success.get())
+                .child(
+                    Element::checkbox("完成后打开设置", launch_after).visible_when(move || {
+                        install_mode.get() == 0 && !meta::setting_exe().is_empty()
+                    }),
+                )
+                .child(
+                    Element::checkbox("完成后打开启动器", launch_after).visible_when(move || {
+                        install_mode.get() == 1 && !meta::launcher_exe().is_empty()
+                    }),
+                ),
+        )
+        .child(Element::leaf().height(8))
         // 完成按钮
         .child(
             Element::button("完 成")
@@ -695,6 +729,15 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .fg(Color::hex(0xFFFFFF))
                 .align(Align::Center)
                 .on_click(move |_ctx: &mut EventCtx| {
+                    if finish_success.get() && launch_after.get() {
+                        if let Some((dir, exe)) = launch_target(
+                            install_mode.get() == 1,
+                            &install_dir.get(),
+                            &install_dir_portable.get(),
+                        ) {
+                            let _ = crate::installer::process::prestart_app(&dir, exe);
+                        }
+                    }
                     std::process::exit(0);
                 }),
         )
@@ -778,6 +821,23 @@ pub fn run_install_wizard(opts: WizardOptions) {
     }
 
     app.run();
+}
+
+/// 完成后要打开的程序：便携 → 启动器，标准 → 设置。清单没声明则为 None。
+fn launch_target(
+    portable: bool,
+    install_dir: &str,
+    portable_dir: &str,
+) -> Option<(PathBuf, &'static str)> {
+    let (dir, exe) = if portable {
+        (portable_dir, meta::launcher_exe())
+    } else {
+        (install_dir, meta::setting_exe())
+    };
+    if exe.is_empty() {
+        return None;
+    }
+    Some((expand_env_path(dir), exe))
 }
 
 /// 便携模式的提示文案。`updating` 为 true 表示这是便携版的原地更新。
