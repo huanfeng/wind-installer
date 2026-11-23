@@ -519,6 +519,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
                         if let Some(why) = crate::path_conflict::data_dir_conflict(
                             &install_dir_val.to_string_lossy(),
                             &data_dir_val.to_string_lossy(),
+                            crate::meta::owned_entries(),
                         ) {
                             config_error.set(why);
                             return;
