@@ -43,6 +43,82 @@ pub fn data_dir_conflict(install_dir: &str, data_dir: &str) -> Option<String> {
     None
 }
 
+/// 安装目录必须是本软件独占的：目标已存在、非空、又不像我们装过的目录时，
+/// 说明是别人的目录（如 `D:\Anaconda`），卸载会整目录删除，所以改装进其下的 `app_id` 子目录。
+///
+/// 目录名已是 `app_id`、不存在、为空、或里面有 `markers` 中任一文件（我们自己的旧安装）时原样返回。
+pub fn dedicated_install_dir(
+    dir: &std::path::Path,
+    app_id: &str,
+    markers: &[&str],
+) -> std::path::PathBuf {
+    let is_named = dir
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(app_id));
+    if is_named {
+        return dir.to_path_buf();
+    }
+    let Ok(mut entries) = std::fs::read_dir(dir) else {
+        return dir.to_path_buf();
+    };
+    if entries.next().is_none() || markers.iter().any(|m| dir.join(m).exists()) {
+        return dir.to_path_buf();
+    }
+    dir.join(app_id)
+}
+
+/// 按当前清单的 `app_id` 与主程序/卸载器作标记，规整安装目录。
+#[cfg(windows)]
+pub fn dedicated_for_app(dir: &std::path::Path) -> std::path::PathBuf {
+    dedicated_install_dir(
+        dir,
+        crate::meta::app_id(),
+        &[crate::installer::UNINSTALLER_NAME, crate::meta::main_exe()],
+    )
+}
+
+#[cfg(test)]
+mod dedicated_tests {
+    use super::dedicated_install_dir as d;
+    use std::path::PathBuf;
+
+    fn tmp(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("wi_ded_{}_{}", tag, std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn foreign_non_empty_dir_gets_subdir() {
+        let p = tmp("foreign");
+        std::fs::write(p.join("python.exe"), "x").unwrap();
+        assert_eq!(d(&p, "WindInput", &["wind_input.exe"]), p.join("WindInput"));
+        let _ = std::fs::remove_dir_all(&p);
+    }
+
+    #[test]
+    fn own_previous_install_is_kept() {
+        let p = tmp("own");
+        std::fs::write(p.join("wind_input.exe"), "x").unwrap();
+        assert_eq!(d(&p, "WindInput", &["wind_input.exe"]), p);
+        let _ = std::fs::remove_dir_all(&p);
+    }
+
+    #[test]
+    fn empty_missing_or_already_named_dir_is_kept() {
+        let p = tmp("empty");
+        assert_eq!(d(&p, "WindInput", &[]), p);
+        let missing = p.join("nope");
+        assert_eq!(d(&missing, "WindInput", &[]), missing);
+        let named = p.join("windinput");
+        std::fs::create_dir_all(&named).unwrap();
+        std::fs::write(named.join("a"), "x").unwrap();
+        assert_eq!(d(&named, "WindInput", &[]), named);
+        let _ = std::fs::remove_dir_all(&p);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::data_dir_conflict as c;

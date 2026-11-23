@@ -494,10 +494,19 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .on_click(move |_ctx: &mut EventCtx| {
                     config_error.set(String::new());
 
+                    // 手输路径绕过了「浏览」里的补子目录：别人的非空目录在这里同样改装进子目录
                     let install_dir_val = if install_mode.get() == 0 {
-                        expand_env_path(&install_dir.get())
+                        let d = crate::path_conflict::dedicated_for_app(&expand_env_path(
+                            &install_dir.get(),
+                        ));
+                        install_dir.set(display_path(&d.to_string_lossy()));
+                        d
                     } else {
-                        expand_env_path(&install_dir_portable.get())
+                        let d = crate::path_conflict::dedicated_for_app(&expand_env_path(
+                            &install_dir_portable.get(),
+                        ));
+                        install_dir_portable.set(display_path(&d.to_string_lossy()));
+                        d
                     };
                     let data_dir_val = expand_env_path(&data_dir.get());
                     // 二次安装的数据目录是只读展示、沿用已有的，改不了，拦了只会卡死升级；便携不用它

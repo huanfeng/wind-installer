@@ -150,7 +150,7 @@ fn run_install(args: Args) {
     if args.silent {
         let mut config = installer::config::InstallConfig::default();
         if let Some(dir) = args.dir {
-            config.install_dir = dir;
+            config.install_dir = path_conflict::dedicated_for_app(&dir);
         }
         if let Some(datadir) = args.datadir {
             config.custom_data_dir = Some(datadir);
