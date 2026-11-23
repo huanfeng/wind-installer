@@ -316,34 +316,89 @@ impl ArchiveReader {
     }
 }
 
-/// 创建输出文件；若目标被其他进程占用（os error 5 / 32），将其改名为 .old_<seq> 后重试
+/// 创建输出文件；若目标被其他进程占用（os error 5 / 32），将其改名为 .old_<8 位数字> 后重试。
+///
+/// 后缀刻意是**十进制数字**：便携启动器只清理 `.old_<数字>` 形的残留，十六进制会让
+/// 它认不出、永远留在目录里。8 位定宽同时满足卸载侧对让路名的识别（`is_stashed_name`）。
 fn create_or_backup(path: &Path) -> Result<File, String> {
+    create_or_backup_with(path, &|old| {
+        // 改名只是让路：那份旧文件仍被进程占用、当前删不掉，排进重启删除队列兜底，
+        // 否则 .old_ 会随每次带锁升级永久累积。best-effort——失败不影响新文件写入。
+        //
+        // 门控到 Windows：`util` 是 cfg(windows) 模块，而 archive 必须保持跨平台
+        // ——wind-packer 要在 Linux 原生构建（见 lib.rs 与 ci.yml 的 linux-packer job）。
+        // 非 Windows 上这个分支本就走不到：进入它的条件是 os error 5/32，即 Windows 的
+        // ACCESS_DENIED / SHARING_VIOLATION，类 Unix 系统允许 unlink 仍被打开的文件。
+        #[cfg(windows)]
+        if let Err(e) = crate::util::reboot::schedule_delete_on_reboot(old) {
+            eprintln!("Warning: {}", e);
+        }
+        #[cfg(not(windows))]
+        let _ = old;
+    })
+}
+
+/// [`create_or_backup`] 的本体，排队动作可注入——真的那个往 HKLM 的重启队列里写，测试不该碰。
+fn create_or_backup_with(path: &Path, schedule: &dyn Fn(&Path)) -> Result<File, String> {
     match File::create(path) {
         Ok(f) => return Ok(f),
         Err(ref e) if matches!(e.raw_os_error(), Some(5) | Some(32)) => {
             let seq = BACKUP_SEQ.fetch_add(1, Ordering::Relaxed);
-            let suffix = std::process::id().wrapping_add(seq);
+            let suffix = std::process::id().wrapping_add(seq) % 100_000_000;
             let old_name = format!(
-                "{}.old_{:08x}",
+                "{}.old_{:08}",
                 path.file_name().unwrap_or_default().to_string_lossy(),
                 suffix
             );
             let old_path = path.parent().unwrap_or(Path::new(".")).join(old_name);
             std::fs::rename(path, &old_path)
                 .map_err(|e| format!("Failed to rename locked file: {}", e))?;
-            // 改名只是让路：那份旧文件仍被进程占用、当前删不掉，排进重启删除队列兜底，
-            // 否则 .old_ 会随每次带锁升级永久累积。best-effort——失败不影响新文件写入。
-            //
-            // 门控到 Windows：`util` 是 cfg(windows) 模块，而 archive 必须保持跨平台
-            // ——wind-packer 要在 Linux 原生构建（见 lib.rs 与 ci.yml 的 linux-packer job）。
-            // 非 Windows 上这个分支本就走不到：进入它的条件是 os error 5/32，即 Windows 的
-            // ACCESS_DENIED / SHARING_VIOLATION，类 Unix 系统允许 unlink 仍被打开的文件。
-            #[cfg(windows)]
-            if let Err(e) = crate::util::reboot::schedule_delete_on_reboot(&old_path) {
-                eprintln!("Warning: {}", e);
-            }
+            schedule(&old_path);
         }
         Err(e) => return Err(format!("Failed to create output file: {}", e)),
     }
     File::create(path).map_err(|e| format!("Failed to create file after backup: {}", e))
+}
+
+#[cfg(all(test, windows))]
+mod locked_file_tests {
+    use super::*;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    /// 模拟 DLL 被宿主映射：他人持有句柄、允许读与改名/删除、不允许写。
+    /// 覆盖写会撞 ERROR_SHARING_VIOLATION，改名让路则可行——正是 LoadLibrary 后的处境。
+    #[test]
+    fn locked_file_is_renamed_aside_and_replaced() {
+        let dir = std::env::temp_dir().join(format!("wi_lock_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dll = dir.join("wind_tsf.dll");
+        std::fs::write(&dll, b"old").unwrap();
+
+        // FILE_SHARE_READ | FILE_SHARE_DELETE
+        let holder = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1 | 4)
+            .open(&dll)
+            .unwrap();
+
+        let queued = std::cell::RefCell::new(Vec::new());
+        let mut f = create_or_backup_with(&dll, &|p| queued.borrow_mut().push(p.to_path_buf()))
+            .expect("被占用的文件应改名让路后写入");
+        f.write_all(b"new").unwrap();
+        drop(f);
+        drop(holder);
+
+        assert_eq!(std::fs::read(&dll).unwrap(), b"new");
+        let q = queued.borrow();
+        assert_eq!(q.len(), 1);
+        let name = q[0].file_name().unwrap().to_string_lossy().into_owned();
+        let suffix = name.strip_prefix("wind_tsf.dll.old_").expect(&name);
+        assert!(
+            suffix.len() == 8 && suffix.bytes().all(|b| b.is_ascii_digit()),
+            "让路后缀必须是 8 位十进制（便携启动器只认数字）: {name}"
+        );
+        assert_eq!(std::fs::read(&q[0]).unwrap(), b"old");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
