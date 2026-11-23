@@ -85,8 +85,11 @@ fn theme_falls_back_to_builtin_palette() {
 fn portable_notice_states_no_system_changes() {
     use wind_installer::ui::install_wizard::portable_notice;
     for updating in [false, true] {
-        assert!(portable_notice(updating).contains("不会向系统"));
+        assert!(portable_notice(updating).contains("不改动系统"));
     }
     assert!(portable_notice(true).contains("更新"));
-    assert!(portable_notice(true).contains("数据保持不变"));
+    for updating in [false, true] {
+        assert!(portable_notice(updating).chars().count() <= 32, "过长会折行");
+    }
+    assert!(portable_notice(true).contains("数据不变"));
 }

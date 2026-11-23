@@ -242,8 +242,9 @@ pub fn run_install_wizard(opts: WizardOptions) {
     let config_error = signal(String::new());
     // 完成页「完成后打开设置/启动器」勾选；默认值在安装结束时按模式与是否首装决定
     let launch_after = signal(false);
-    // 已提示过「目录非空」并等待确认的路径
-    let nonempty_confirmed = signal(String::new());
+    // 「目录非空」确认对话框及其正文
+    let show_nonempty = signal(false);
+    let nonempty_msg = signal(String::new());
     let agreed = signal(false);
 
     // bool 是 Copy，可被下面的 channel 闭包直接捕获
@@ -308,6 +309,28 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // ============================================================
     //  PAGE 0：配置页
     // ============================================================
+    // 开始安装：从当前信号取目录与模式。向导按钮与「目录非空」确认共用，两处不能各写一份
+    let begin_install = {
+        let tx = tx.clone();
+        move || {
+            let install_dir_val = if install_mode.get() == 0 {
+                expand_env_path(&install_dir.get())
+            } else {
+                expand_env_path(&install_dir_portable.get())
+            };
+            let data_dir_val = expand_env_path(&data_dir.get());
+            progress_value.set(0.0);
+            current_page.set(PAGE_PROGRESS);
+            let mode = if install_mode.get() == 0 {
+                InstallMode::Standard
+            } else {
+                InstallMode::Portable
+            };
+            spawn_install(tx.clone(), install_dir_val, data_dir_val, mode, is_fresh_install);
+        }
+    };
+    let begin_install_confirmed = begin_install.clone();
+
     let page_config = Element::col()
         .fill()
         .weight(1.0)
@@ -373,7 +396,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
                                 move |path| {
                                     if let Some(path) = path {
                                         install_dir.set(
-                                            finalize_picked_folder(path)
+                                            path
                                                 .to_string_lossy()
                                                 .to_string(),
                                         );
@@ -401,7 +424,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
                                 move |path| {
                                     if let Some(path) = path {
                                         install_dir_portable.set(
-                                            finalize_picked_folder(path)
+                                            path
                                                 .to_string_lossy()
                                                 .to_string(),
                                         );
@@ -447,7 +470,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
                                 move |path| {
                                     if let Some(path) = path {
                                         data_dir.set(
-                                            finalize_picked_folder(path)
+                                            path
                                                 .to_string_lossy()
                                                 .to_string(),
                                         );
@@ -480,12 +503,13 @@ pub fn run_install_wizard(opts: WizardOptions) {
                     Element::label(meta::s_mode_hint())
                         .font_size(11.0)
                         .fg(Color::hex(theme::text_muted()))
-                        .width_match(),
+                        .width_match()
+                        .visible_when(move || install_mode.get() == 0),
                 )
                 // 便携模式的边界说明：更新场景下用户最关心「会不会动我的系统」，必须直说
                 .child(
                     Element::label(portable_notice(quiet))
-                        .font_size(12.0)
+                        .font_size(11.0)
                         .fg(Color::hex(theme::accent()))
                         .width_match()
                         .visible_when(move || install_mode.get() == 1),
@@ -530,19 +554,6 @@ pub fn run_install_wizard(opts: WizardOptions) {
                     } else {
                         expand_env_path(&install_dir_portable.get())
                     };
-                    // 目录非空且不是本软件的安装目录：提示一次，用户再点一次即视为确认。
-                    // 不强改路径——里面可能就是用户想沿用的旧数据。
-                    let dir_key = install_dir_val.to_string_lossy().to_string();
-                    if crate::path_conflict::is_foreign_non_empty_for_app(&install_dir_val)
-                        && nonempty_confirmed.get() != dir_key
-                    {
-                        nonempty_confirmed.set(dir_key);
-                        config_error.set(
-                            "所选目录非空，安装会把程序文件写入其中（同名的 data 等会被覆盖，卸载时只删除本软件的这些文件，其余保留）。确认请再点一次「立即安装」，或换一个目录。"
-                                .into(),
-                        );
-                        return;
-                    }
                     let data_dir_val = expand_env_path(&data_dir.get());
                     // 二次安装的数据目录是只读展示、沿用已有的，改不了，拦了只会卡死升级；便携不用它
                     if is_fresh_install && install_mode.get() == 0 {
@@ -555,21 +566,13 @@ pub fn run_install_wizard(opts: WizardOptions) {
                             return;
                         }
                     }
-                    progress_value.set(0.0);
-                    current_page.set(PAGE_PROGRESS);
-                    let mode = if install_mode.get() == 0 {
-                        InstallMode::Standard
-                    } else {
-                        InstallMode::Portable
-                    };
-
-                    spawn_install(
-                        tx.clone(),
-                        install_dir_val,
-                        data_dir_val,
-                        mode,
-                        is_fresh_install,
-                    );
+                    // 目录非空且不是本软件的安装目录：弹窗说清后果，由用户决定
+                    if crate::path_conflict::is_foreign_non_empty_for_app(&install_dir_val) {
+                        nonempty_msg.set(nonempty_message(&install_dir_val));
+                        show_nonempty.set(true);
+                        return;
+                    }
+                    begin_install();
                 }),
         )
         .child(Element::leaf().weight(1.0));
@@ -771,17 +774,66 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // ============================================================
     //  组装根节点
     // ============================================================
-    let root = Element::col()
-        .size(win_w, win_h)
-        .bg(Color::hex(theme::bg_primary()));
+    let nonempty_dialog = Element::dialog(
+        show_nonempty,
+        Element::col()
+            .width(400)
+            .bg(Color::hex(theme::bg_primary()))
+            .corner(14.0)
+            .padding(22)
+            .spacing(14)
+            .child(
+                Element::label("所选目录不是空的")
+                    .font_size(17.0)
+                    .fg(Color::hex(theme::warning()))
+                    .width_match(),
+            )
+            .child(
+                Element::label_signal(nonempty_msg)
+                    .font_size(13.0)
+                    .fg(Color::hex(theme::text_secondary()))
+                    .width_match(),
+            )
+            .child(
+                Element::row()
+                    .width_match()
+                    .spacing(10)
+                    .child(Element::leaf().weight(1.0))
+                    .child(
+                        Element::button("换一个目录")
+                            .width(110)
+                            .height(38)
+                            .corner(8.0)
+                            .bg(Color::hex(theme::accent()))
+                            .fg(Color::hex(0xFFFFFF))
+                            .on_click(move |_ctx: &mut EventCtx| {
+                                show_nonempty.set(false);
+                            }),
+                    )
+                    .child(
+                        Element::button("仍然安装")
+                            .width(100)
+                            .height(38)
+                            .corner(8.0)
+                            .on_click(move |_ctx: &mut EventCtx| {
+                                show_nonempty.set(false);
+                                begin_install_confirmed();
+                            }),
+                    ),
+            ),
+    );
+
+    // 内容列铺满实际客户区，不写死清单尺寸（见 uninstall_wizard::window_root 的说明）
+    let content = Element::col().bg(Color::hex(theme::bg_primary()));
 
     #[cfg(feature = "frameless")]
-    let root = root.child(title_bar);
+    let content = content.child(title_bar);
 
-    let root = root
+    let content = content
         .child(page_config)
         .child(page_progress)
         .child(page_finish);
+    let root = super::uninstall_wizard::window_root(content, nonempty_dialog);
 
     let app = app
         .centered()
@@ -840,12 +892,23 @@ fn launch_target(
     Some((expand_env_path(dir), exe))
 }
 
+/// 「目录非空」对话框正文：写明会发生什么，用户据此决定。
+fn nonempty_message(dir: &std::path::Path) -> String {
+    let count = std::fs::read_dir(dir).map(|d| d.count()).unwrap_or(0);
+    format!(
+        "{}\n\n该目录里已有 {} 项内容，且不是本软件的安装目录。继续安装会把程序文件写入其中，与包内同名的文件和 data 目录会被覆盖。\n\n卸载时只删除本软件自己的文件，目录里其余内容会保留。如果这是旧数据目录，可以放心继续；不确定就换一个新目录。",
+        dir.display(),
+        count
+    )
+}
+
 /// 便携模式的提示文案。`updating` 为 true 表示这是便携版的原地更新。
 pub fn portable_notice(updating: bool) -> &'static str {
+    // 单行放得下是硬要求：折成两行会把「立即安装」顶出窗口底边
     if updating {
-        "正在更新便携版：只替换所选目录中的程序文件，不会向系统安装或注册任何内容（不写注册表、不创建快捷方式），您的数据保持不变。"
+        "更新便携版：只替换所选目录中的文件，不改动系统，数据不变。"
     } else {
-        "便携模式：只把文件释放到所选目录，不会向系统安装或注册任何内容（不写注册表、不创建快捷方式）。"
+        "便携模式：只把文件释放到所选目录，不改动系统。"
     }
 }
 
@@ -914,17 +977,4 @@ fn folder_pick_dialog(title: &str, current_path: &str) -> PickDialog {
         probe = p.parent();
     }
     dialog
-}
-
-/// 用户选完目录后的收尾：若选的目录名不是 APP_ID，自动追加子目录。
-fn finalize_picked_folder(path: PathBuf) -> PathBuf {
-    if path
-        .file_name()
-        .map(|n| n != crate::meta::app_id())
-        .unwrap_or(true)
-    {
-        path.join(crate::meta::app_id())
-    } else {
-        path
-    }
 }
