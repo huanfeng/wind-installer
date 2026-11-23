@@ -172,21 +172,9 @@ pub fn run_uninstall_wizard() {
     let cache_dirs: &[String] = meta::localdata().map_or(&[], |l| l.cache_dirs.as_slice());
     let has_cache_entries = !cache_dirs.is_empty();
     // 勾选行附注与确认弹窗都从 state_files_clause() 取，不各写一遍——见该函数文档。
-    let state_clause = state_files_clause();
-    let confirm_clause = state_clause.clone();
-    // 措辞必须是**条件式**的。写成「另将删除 …」是在陈述事实，而这一组只有在上面那个
-    // 危险勾选被勾上时才删——没勾就不删，界面却说了要删，同样是规则 5 的违反，只是
-    // 方向相反（说了不做，而不是做了不说）。指名是哪个勾选、而不是靠「上一项」这种
-    // 位置指代：文案与那个勾选取自同一个 s_user_data_label()，中间再插几行也不会错位。
-    let state_note = if state_clause.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "勾选「{}」时，还将一并删除 {}",
-            meta::s_user_data_label(),
-            state_clause
-        )
-    };
+    let confirm_clause = state_files_clause();
+    // 状态文件清单只在「删除用户数据」的确认弹窗里列出（见 `confirm_clause`）：
+    // 页面上再挂一整行长说明会把窗口挤满，而弹窗正是用户按下不可逆按钮前的必经一步。
     // 本机实际生效的用户数据目录（自定义过就是自定义路径），与确认对话框、与真正删除
     // 的目录同出一次解析。
     let user_data_path = crate::uninstaller::cleanup::resolve_user_data_dir()
@@ -235,8 +223,7 @@ pub fn run_uninstall_wizard() {
                 .width_match()
                 .spacing(4)
                 .child(delete_data_row)
-                .child(note_row(user_data_path))
-                .child(note_row(state_note.clone()).visible_when(move || !state_note.is_empty())),
+                .child(note_row(user_data_path)),
         )
         .child(
             // 0.12 的启用轴分三形态，绑 Signal 走 `_signal` 后缀那一支

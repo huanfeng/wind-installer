@@ -240,6 +240,8 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // 且 quiet 模式据此放弃自动退出（见下方 channel 处理）。
     let finish_reboot = signal(false);
     let config_error = signal(String::new());
+    // 已提示过「目录非空」并等待确认的路径
+    let nonempty_confirmed = signal(String::new());
     let agreed = signal(false);
 
     // bool 是 Copy，可被下面的 channel 闭包直接捕获
@@ -499,20 +501,24 @@ pub fn run_install_wizard(opts: WizardOptions) {
                 .on_click(move |_ctx: &mut EventCtx| {
                     config_error.set(String::new());
 
-                    // 手输路径绕过了「浏览」里的补子目录：别人的非空目录在这里同样改装进子目录
                     let install_dir_val = if install_mode.get() == 0 {
-                        let d = crate::path_conflict::dedicated_for_app(&expand_env_path(
-                            &install_dir.get(),
-                        ));
-                        install_dir.set(display_path(&d.to_string_lossy()));
-                        d
+                        expand_env_path(&install_dir.get())
                     } else {
-                        let d = crate::path_conflict::dedicated_for_app(&expand_env_path(
-                            &install_dir_portable.get(),
-                        ));
-                        install_dir_portable.set(display_path(&d.to_string_lossy()));
-                        d
+                        expand_env_path(&install_dir_portable.get())
                     };
+                    // 目录非空且不是本软件的安装目录：提示一次，用户再点一次即视为确认。
+                    // 不强改路径——里面可能就是用户想沿用的旧数据。
+                    let dir_key = install_dir_val.to_string_lossy().to_string();
+                    if crate::path_conflict::is_foreign_non_empty_for_app(&install_dir_val)
+                        && nonempty_confirmed.get() != dir_key
+                    {
+                        nonempty_confirmed.set(dir_key);
+                        config_error.set(
+                            "所选目录非空，安装会把程序文件写入其中（同名的 data 等会被覆盖，卸载时只删除本软件的这些文件，其余保留）。确认请再点一次「立即安装」，或换一个目录。"
+                                .into(),
+                        );
+                        return;
+                    }
                     let data_dir_val = expand_env_path(&data_dir.get());
                     // 二次安装的数据目录是只读展示、沿用已有的，改不了，拦了只会卡死升级；便携不用它
                     if is_fresh_install && install_mode.get() == 0 {
