@@ -8,6 +8,7 @@ mod archive;
 mod installer;
 mod manifest;
 mod meta;
+mod owned;
 mod path_conflict;
 mod ui;
 mod uninstaller;

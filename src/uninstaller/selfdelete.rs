@@ -55,12 +55,28 @@ pub fn self_delete_target() -> Option<PathBuf> {
 /// 而漂移的后果很难看：两个参数对调后副本会把 `"2628"` 当成目标目录，
 /// 那个相对路径不存在，`remove_dir_with_retry` 于是提前返回「删掉了」，
 /// 日志写下「安装目录已删除」，而安装目录完好无损地留在盘上。
-fn self_delete_argv(dir: &Path, pid: u32) -> Vec<OsString> {
-    vec![
+///
+/// 第三个参数之后是安装包的顶层条目名（`owned`）：副本不载入清单，只能由父进程带过去。
+/// 缺省（旧版启动的副本，或旧包没有清单字段）时整目录删除。
+fn self_delete_argv(dir: &Path, pid: u32, owned: &[String]) -> Vec<OsString> {
+    let mut v = vec![
         OsString::from(FLAG),
         dir.as_os_str().to_os_string(),
         OsString::from(pid.to_string()),
-    ]
+    ];
+    v.extend(owned.iter().map(OsString::from));
+    v
+}
+
+/// 命令行里 PID 之后的顶层条目名。
+fn parse_owned_args<S: AsRef<OsStr>>(args: &[S]) -> Vec<String> {
+    let Some(pos) = args.iter().position(|a| a.as_ref() == OsStr::new(FLAG)) else {
+        return Vec::new();
+    };
+    args.iter()
+        .skip(pos + 3)
+        .filter_map(|s| s.as_ref().to_str().map(str::to_string))
+        .collect()
 }
 
 /// 命令行的**读端**。参数由调用方传入而不是就地读 `args()`，这样测试能直接喂给它 ——
@@ -127,7 +143,11 @@ pub fn trigger_self_delete_with_code(install_dir: &Path, exit_code: i32) -> Resu
 
     // 把自己的 PID 交给副本：让它等**这个进程真的退出**，而不是盲等一段时间。
     if let Err(e) = Command::new(&temp_exe)
-        .args(self_delete_argv(install_dir, std::process::id()))
+        .args(self_delete_argv(
+            install_dir,
+            std::process::id(),
+            meta::owned_entries(),
+        ))
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
     {
@@ -154,7 +174,27 @@ pub fn execute_self_delete(install_dir: &Path) {
 
     wait_for_parent(parent);
 
-    if remove_dir_with_retry(install_dir, std::thread::sleep) {
+    let owned = parse_owned_args(&std::env::args_os().collect::<Vec<_>>());
+    if !owned.is_empty() {
+        // 只收拾安装包自己的条目；用户放进来的其余内容保留，目录非空就不删它
+        let targets = crate::owned::owned_paths(install_dir, &owned);
+        let left = remove_owned_with_retry(&targets, std::thread::sleep);
+        if !left.is_empty() {
+            log(&format!("self-delete: {} 项删不掉，转排重启清理", left.len()));
+            for p in &left {
+                if p.is_dir() {
+                    reboot::schedule_dir_on_reboot(p);
+                } else {
+                    let _ = reboot::schedule_delete_on_reboot(p);
+                }
+            }
+        }
+        if crate::owned::remove_dir_if_empty(install_dir) {
+            log("self-delete: 安装目录已删除");
+        } else {
+            log("self-delete: 安装目录内尚有其他内容，保留目录");
+        }
+    } else if remove_dir_with_retry(install_dir, std::thread::sleep) {
         log("self-delete: 安装目录已删除");
     } else {
         // 最后一道防线。没有它，安装目录就永远留在盘上 —— 而完成页已经告诉用户
@@ -219,6 +259,20 @@ fn remove_dir_with_retry(dir: &Path, sleep: impl Fn(Duration)) -> bool {
     // 末尾这次尝试不是多余的：没有它，最后那 1600ms 退避就是白睡的
     // （睡完不再试就直接放弃）。整体是 6 次尝试 / 5 次退避 / 约 3.1 秒。
     is_gone(dir) || std::fs::remove_dir_all(dir).is_ok()
+}
+
+/// 逐项删自有条目，删不掉就退避重试，返回最终仍在的那些。退避节奏同 [`remove_dir_with_retry`]。
+fn remove_owned_with_retry(targets: &[PathBuf], sleep: impl Fn(Duration)) -> Vec<PathBuf> {
+    const BACKOFF_MS: [u64; 5] = [100, 200, 400, 800, 1600];
+    let mut left = crate::owned::remove_all(targets);
+    for delay in BACKOFF_MS {
+        if left.is_empty() {
+            break;
+        }
+        sleep(Duration::from_millis(delay));
+        left = crate::owned::remove_all(&left);
+    }
+    left
 }
 
 /// 目录是否**确实**不在了。
@@ -420,7 +474,8 @@ mod self_delete_tests {
     #[test]
     fn what_we_send_is_what_we_parse() {
         let dir = PathBuf::from(r"C:\Program Files\Demo App");
-        let argv = self_delete_argv(&dir, 2628);
+        let owned = vec!["data".to_string(), "app.exe".to_string()];
+        let argv = self_delete_argv(&dir, 2628, &owned);
 
         // 真实调用里 argv 前面还有 exe 自身，这里照样摆一个，确保解析靠的是标志位
         // 而不是固定下标。
@@ -428,5 +483,27 @@ mod self_delete_tests {
         full.extend(argv);
 
         assert_eq!(parse_self_delete_args(&full), (Some(dir), Some(2628)));
+        assert_eq!(parse_owned_args(&full), owned);
+    }
+
+    #[test]
+    fn owned_args_are_empty_for_old_style_command_lines() {
+        assert!(parse_owned_args(&["x.exe", FLAG, r"C:\App", "2628"]).is_empty());
+        assert!(parse_owned_args(&["x.exe"]).is_empty());
+    }
+
+    #[test]
+    fn owned_removal_keeps_foreign_files_and_retries() {
+        let d = temp_dir("owned_retry");
+        std::fs::create_dir_all(d.join("data")).unwrap();
+        std::fs::write(d.join("data/x"), "x").unwrap();
+        std::fs::write(d.join("mine.txt"), "keep").unwrap();
+        let targets = crate::owned::owned_paths(&d, &["data".to_string()]);
+        let left = remove_owned_with_retry(&targets, |_| {});
+        assert!(left.is_empty());
+        assert!(!d.join("data").exists());
+        assert!(d.join("mine.txt").exists());
+        assert!(!crate::owned::remove_dir_if_empty(&d));
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

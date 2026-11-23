@@ -128,6 +128,10 @@ pub fn acl_dlls() -> &'static [String] {
 pub fn legacy_files() -> &'static [String] {
     &manifest().app.legacy_files
 }
+/// 安装包的顶层条目（卸载只删这些）；旧包为空。
+pub fn owned_entries() -> &'static [String] {
+    &manifest().app.owned_entries
+}
 pub fn legacy_dirs() -> &'static [String] {
     &manifest().app.legacy_dirs
 }

@@ -925,3 +925,15 @@ fn user_data_unsafe_templates_are_rejected() {
         );
     }
 }
+
+/// 旧清单没有 `owned_entries`：解析为空（卸载沿用整目录删除）；带上时能原样往返。
+#[test]
+fn owned_entries_defaults_empty_and_roundtrips() {
+    let cfg = ProjectConfig::from_toml_str(SAMPLE).unwrap();
+    assert!(cfg.manifest.app.owned_entries.is_empty());
+
+    let mut m = cfg.manifest.clone();
+    m.app.owned_entries = vec!["data".into(), "demo_app.exe".into()];
+    let back = AppManifest::from_toml_bytes(&m.to_toml_bytes().unwrap()).unwrap();
+    assert_eq!(back.app.owned_entries, ["data", "demo_app.exe"]);
+}

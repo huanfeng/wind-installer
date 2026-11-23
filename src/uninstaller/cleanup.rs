@@ -379,8 +379,28 @@ fn delete_install_files_with(
     // 于是重启时这个目录仍非空、删除静默失败，整棵树的重启兜底等于不存在。
     // `schedule_dir_on_reboot` 自底向上逐项处理，且能当场删掉的一律当场删、不进队列，
     // 故正常路径（`remove_dir_all` 一把成功）根本走不到它，也不会多排任何重启任务。
-    if std::fs::remove_dir_all(install_dir).is_err() {
-        schedule_dir(install_dir);
+    //
+    // 清单带有 `owned_entries`（安装包顶层条目）时只删这些，其余留着，
+    // 目录删完仍不空就不删它本身；旧包没有这份清单，沿用整目录删除。
+    let owned = meta::owned_entries();
+    if owned.is_empty() {
+        if std::fs::remove_dir_all(install_dir).is_err() {
+            schedule_dir(install_dir);
+        }
+    } else {
+        // 正在运行的自身 exe 交给自删除流程：排队原路径会在重装后删掉新的 uninstall.exe
+        let targets: Vec<PathBuf> = crate::owned::owned_paths(install_dir, owned)
+            .into_iter()
+            .filter(|p| !reboot::is_current_exe(p))
+            .collect();
+        for left in crate::owned::remove_all(&targets) {
+            if left.is_dir() {
+                schedule_dir(&left);
+            } else {
+                let _ = schedule_file(&left);
+            }
+        }
+        crate::owned::remove_dir_if_empty(install_dir);
     }
 
     Ok(())

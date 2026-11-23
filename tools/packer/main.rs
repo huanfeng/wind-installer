@@ -282,8 +282,14 @@ impl Loaded {
     }
 
     /// 运行期清单（TOML 文本字节）。
-    fn manifest_bytes(&self) -> Result<Vec<u8>, String> {
-        self.cfg.manifest.to_toml_bytes()
+    ///
+    /// `owned_entries` 在此从源目录第一层现算：卸载器 overlay 与归档内清单用的是同一份字节，
+    /// 源目录没变两次结果必然一致（名字已排序）。
+    fn manifest_bytes(&self, source: &Path) -> Result<Vec<u8>, String> {
+        let mut m = self.cfg.manifest.clone();
+        m.app.owned_entries = wind_installer::owned::top_level_names(source)
+            .map_err(|e| format!("枚举源目录 {:?} 失败: {}", source, e))?;
+        m.to_toml_bytes()
     }
 
     /// logo 字节（可选）。读不到只警告并回退到空——stub 内置了默认 logo，
@@ -358,7 +364,7 @@ fn prepare_uninstaller(
         return Ok(PrepOutcome::NoUninstaller);
     }
 
-    let manifest = l.manifest_bytes()?;
+    let manifest = l.manifest_bytes(source)?;
     let logo = l.logo_bytes();
 
     match archive::classify_overlay(
@@ -470,7 +476,7 @@ fn cmd_pack_inner(
         _ => CompressionType::Zstd,
     };
 
-    let manifest_bytes = l.manifest_bytes()?;
+    let manifest_bytes = l.manifest_bytes(&source)?;
     let logo_bytes = l.logo_bytes();
 
     println!("Wind Packer · pack");
@@ -625,6 +631,7 @@ fn cmd_inspect(file: &Path) -> Result<(), String> {
     println!("  display_name  = {}", m.app.display_name);
     println!("  version       = {}", m.app.version);
     println!("  main_exe      = {}", m.app.main_exe);
+    println!("  owned_entries = {:?}（卸载只删这些顶层条目）", m.app.owned_entries);
 
     // 能力段：缺省即该能力不执行，故必须逐项列出「关」的那些——
     // 一份漏写 [autostart] 的清单打出来的包不会自启，而这在打包期是静默的。

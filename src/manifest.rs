@@ -107,6 +107,10 @@ pub struct AppInfo {
     /// 升级时清理的旧版遗留目录（相对安装目录）。
     #[serde(default)]
     pub legacy_dirs: Vec<String>,
+    /// 安装包的顶层条目名，**由打包器按源目录第一层填写，不在 app.toml 里手写**。
+    /// 卸载只删这些；缺省（旧包）为空，卸载沿用整目录删除。
+    #[serde(default)]
+    pub owned_entries: Vec<String>,
 }
 
 /// UI 尺寸（纯运行期配置）。
