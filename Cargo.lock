@@ -612,21 +612,7 @@ dependencies = [
  "rustc_version",
  "toml 0.8.23",
  "vswhom",
- "winreg 0.52.0",
-]
-
-[[package]]
-name = "embed-resource"
-version = "3.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbfdaacccebec3b28e4866b8973543c7647797db5ada1bdab552e48fe665fbbd"
-dependencies = [
- "cc",
- "memchr",
- "rustc_version",
- "toml 1.1.6+spec-1.1.0",
- "vswhom",
- "winreg 0.55.0",
+ "winreg",
 ]
 
 [[package]]
@@ -1748,9 +1734,9 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "resvg"
-version = "0.48.1"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67e3803f97b999e80cbf7c6ecdd07a8102204d92e1633cf48783720c521196bd"
+checksum = "77bb4b284cf8a5c8ae721594af53387fb755d2196fddb32b2acfb4fa9251fa0c"
 dependencies = [
  "bytemuck",
  "log",
@@ -2015,9 +2001,9 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "svgtypes"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "695b5790b3131dafa99b3bbfd25a216edb3d216dad9ca208d4657bfb8f2abc3d"
+checksum = "9f12b12995e3638c70618c1facb1ce65302f6a6f706b675f07c58a5d7391120e"
 dependencies = [
  "kurbo",
  "siphasher",
@@ -2291,9 +2277,9 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "usvg"
-version = "0.48.1"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91"
+checksum = "bdb896f04730b97805bbc3191fc57e4bf03face0f14577dd42e783c4d8c98802"
 dependencies = [
  "data-url",
  "imagesize",
@@ -2673,7 +2659,7 @@ dependencies = [
  "crc32fast",
  "ctrlc",
  "editpe",
- "embed-resource 2.5.2",
+ "embed-resource",
  "indexmap",
  "mslnk",
  "rand",
@@ -2681,7 +2667,7 @@ dependencies = [
  "toml 0.8.23",
  "windows",
  "windui",
- "winreg 0.52.0",
+ "winreg",
  "xz2",
  "zstd",
 ]
@@ -2955,13 +2941,12 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "windui"
-version = "0.33.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "973ca9c12ae6eeaf7220ecdca9335b2cd1485a87d457bbd951c14b0096b7d497"
+checksum = "adfaa10a69fc48c41fa5163845cdcffc6071e759953d8122282c5b7f6dfa301f"
 dependencies = [
  "ab_glyph_rasterizer",
  "bytemuck",
- "embed-resource 3.0.11",
  "log",
  "objc2",
  "objc2-app-kit",
@@ -3020,31 +3005,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "winreg"
-version = "0.55.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb5a765337c50e9ec252c2069be9bf91c7df47afb103b642ba3a53bf8101be97"
-dependencies = [
- "cfg-if",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "x11rb"
-version = "0.13.2"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9993aa5be5a26815fe2c3eacfc1fde061fc1a1f094bf1ad2a18bf9c495dd7414"
+checksum = "5a8885a854a8bfdf87a301e53e41b17c5f8f33639903131338b997b1eb614f44"
 dependencies = [
  "gethostname",
  "rustix",
  "x11rb-protocol",
+ "xcursor",
 ]
 
 [[package]]
 name = "x11rb-protocol"
-version = "0.13.2"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
+checksum = "acf4d1bc32aa46eec18caa634ec3cf4c05bfa151f12b93b510b15190f69a1ca8"
 
 [[package]]
 name = "xcursor"
@@ -3064,12 +3040,12 @@ dependencies = [
 
 [[package]]
 name = "xim"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb59e6a1a1e0a88e15f870621fa98e8a840f736db8d852ff4e254d76dc75fe26"
+checksum = "28eeca625387ebe77f391175dfd5cbdfa1dd1b25eb66820b5c9b19d64a2296b0"
 dependencies = [
  "ahash",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "log",
  "x11rb",
  "xim-ctext",
@@ -3078,18 +3054,18 @@ dependencies = [
 
 [[package]]
 name = "xim-ctext"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4cba0737ee5a6aa47324217b1780e5218fb2c3eab1d960346de56d91f8ca585"
+checksum = "a4af1bc64b152f8ee409b4c07978078f79de5d93375217804d8358a77c5bb9e6"
 dependencies = [
  "encoding_rs",
 ]
 
 [[package]]
 name = "xim-parser"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dcee45f89572d5a65180af3a84e7ddb24f5ea690a6d3aa9de231281544dd7b7"
+checksum = "bb506ad59e78bbf0237fc5b906b8bbd550c38f7f23dd0bdc7f94e5391c031257"
 dependencies = [
  "bitflags 2.13.2",
 ]
