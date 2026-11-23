@@ -40,6 +40,10 @@ struct Args {
     #[arg(long)]
     dir: Option<PathBuf>,
 
+    /// 便携模式（与 `--quiet` 合用：原地更新便携安装；`--silent` 暂不支持）
+    #[arg(long)]
+    portable: bool,
+
     /// 数据目录
     #[arg(long)]
     datadir: Option<PathBuf>,
@@ -175,6 +179,7 @@ fn run_install(args: Args) {
         ui::install_wizard::run_install_wizard(ui::install_wizard::WizardOptions {
             quiet: args.quiet,
             install_dir: args.dir,
+            portable: args.portable,
         });
     }
 
@@ -240,6 +245,20 @@ mod arg_tests {
         ]);
         assert!(args.silent, "--silent 未被识别");
         assert_eq!(args.dir, Some(PathBuf::from(r"C:\Program Files\Demo App")));
+    }
+
+    /// 便携更新传的是 `--quiet --portable --dir`；`--portable` 解析丢了就会被装成标准版。
+    #[test]
+    fn quiet_portable_update_args() {
+        let args = Args::parse_from([
+            "wind-installer",
+            "--quiet",
+            "--portable",
+            "--dir",
+            r"D:\Portable\App",
+        ]);
+        assert!(args.quiet && args.portable);
+        assert_eq!(args.dir, Some(PathBuf::from(r"D:\Portable\App")));
     }
 
     #[test]

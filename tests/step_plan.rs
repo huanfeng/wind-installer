@@ -86,11 +86,13 @@ fn portable_plan_only_extracts_and_marks() {
 
 #[test]
 fn portable_plan_never_touches_system_even_with_all_capabilities() {
-    // 便携模式的全部语义 = 解压 + 标记：即便清单声明了输入法/字体/自启动，也一律不执行
+    // 便携模式 = 停旧进程 + 解压 + 标记：即便清单声明了输入法/字体/自启动，也一律不执行。
+    // 停旧进程只在清单声明了 process_names 时入计划（原地更新便携版时占用文件要先释放）
     let names = plan_names(FULL, InstallMode::Portable);
     assert_eq!(
         names,
         [
+            "正在停止旧进程...",
             "正在解压数据...",
             "正在释放文件...",
             "正在写入便携模式标记..."

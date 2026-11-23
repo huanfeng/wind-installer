@@ -17,6 +17,9 @@ pub fn plan_install<'a>(m: &AppManifest, mode: InstallMode) -> Vec<Box<dyn Step<
     let mut plan: Vec<Box<dyn Step<InstallCtx<'a>>>> = Vec::new();
 
     if mode == InstallMode::Portable {
+        if !m.app.process_names.is_empty() {
+            plan.push(Box::new(TerminateProcesses));
+        }
         plan.push(Box::new(PrepareArchive));
         plan.push(Box::new(ExtractFiles));
         plan.push(Box::new(WritePortableMarker));

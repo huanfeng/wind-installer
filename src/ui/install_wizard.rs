@@ -99,6 +99,8 @@ pub struct WizardOptions {
     pub quiet: bool,
     /// 预设安装目录；`quiet` 模式下由调用方传入当前安装位置。
     pub install_dir: Option<PathBuf>,
+    /// 便携升级：`install_dir` 是便携目录，按便携模式原地更新（默认选便捷模式）。
+    pub portable: bool,
 }
 
 /// 后台执行安装计划。向导的「立即安装」按钮与 quiet 模式共用此入口，
@@ -216,7 +218,7 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // quiet 模式同样从配置页开始（只是整页置灰不可改），停留片刻再自动进入安装。
     // 直接跳到进度页会让用户来不及看清"在装什么、装到哪"，观感上像是窗口闪了一下。
     let current_page = signal(PAGE_CONFIG);
-    let install_mode = signal(0usize);
+    let install_mode = signal(if opts.portable { 1usize } else { 0 });
     // 输入框里显示展开后的实际路径（`%APPDATA%` 这类写法普通用户看不懂）；安装时用的是同一次展开。
     let install_dir = signal(display_path(
         &opts
@@ -225,7 +227,10 @@ pub fn run_install_wizard(opts: WizardOptions) {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(default_install_dir),
     ));
-    let install_dir_portable = signal(display_path(&default_portable_dir()));
+    let install_dir_portable = signal(display_path(&match (&opts.install_dir, opts.portable) {
+        (Some(p), true) => p.to_string_lossy().to_string(),
+        _ => default_portable_dir(),
+    }));
     let data_dir = signal(display_path(&default_data_dir()));
     let progress_text = signal(String::from("正在准备安装..."));
     let progress_value = signal(0.0f32);
@@ -735,16 +740,25 @@ pub fn run_install_wizard(opts: WizardOptions) {
     // 用户得以看清应用名、版本与安装目录，再自动转入进度页开始安装。
     //
     // 放在 run() 之前：channel 的 pump 已注册，线程此刻发来的消息不会丢失。
-    // 模式固定 Standard —— 便携安装由调用方（wind-setting）拦下走完整向导，
-    // 不会走到这里（无人值守升级会把便携改造成标准安装）。
+    // 模式由 `--portable` 决定：便携升级必须保持便携，不能被改造成标准安装。
     if quiet {
-        let dir = expand_env_path(&install_dir.get());
+        let portable = opts.portable;
+        let dir = expand_env_path(&if portable {
+            install_dir_portable.get()
+        } else {
+            install_dir.get()
+        });
         let data = expand_env_path(&data_dir.get());
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(QUIET_PREVIEW_MS));
             // 先切页再装：消息按序处理，进度页必定先于第一条进度就位
             quiet_tx.send(ProgressMsg::BeginInstall).ok();
-            run_install_plan(quiet_tx, dir, data, InstallMode::Standard, is_fresh_install);
+            let mode = if portable {
+                InstallMode::Portable
+            } else {
+                InstallMode::Standard
+            };
+            run_install_plan(quiet_tx, dir, data, mode, is_fresh_install);
         });
     }
 
