@@ -465,6 +465,14 @@ pub fn run_install_wizard(opts: WizardOptions) {
                         .font_size(11.0)
                         .fg(Color::hex(theme::text_muted()))
                         .width_match(),
+                )
+                // 便携模式的边界说明：更新场景下用户最关心「会不会动我的系统」，必须直说
+                .child(
+                    Element::label(portable_notice(quiet))
+                        .font_size(12.0)
+                        .fg(Color::hex(theme::accent()))
+                        .width_match()
+                        .visible_when(move || install_mode.get() == 1),
                 ),
         )
         // 用户协议
@@ -770,6 +778,15 @@ pub fn run_install_wizard(opts: WizardOptions) {
     }
 
     app.run();
+}
+
+/// 便携模式的提示文案。`updating` 为 true 表示这是便携版的原地更新。
+pub fn portable_notice(updating: bool) -> &'static str {
+    if updating {
+        "正在更新便携版：只替换所选目录中的程序文件，不会向系统安装或注册任何内容（不写注册表、不创建快捷方式），您的数据保持不变。"
+    } else {
+        "便携模式：只把文件释放到所选目录，不会向系统安装或注册任何内容（不写注册表、不创建快捷方式）。"
+    }
 }
 
 fn default_install_dir() -> String {

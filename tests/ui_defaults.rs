@@ -79,3 +79,14 @@ fn theme_falls_back_to_builtin_palette() {
     assert_eq!(theme::warning(), 0xFA9D3B);
     assert_ne!(theme::warning(), theme::error());
 }
+
+/// 便携提示必须直说不会动系统；更新场景另说明数据不变。
+#[test]
+fn portable_notice_states_no_system_changes() {
+    use wind_installer::ui::install_wizard::portable_notice;
+    for updating in [false, true] {
+        assert!(portable_notice(updating).contains("不会向系统"));
+    }
+    assert!(portable_notice(true).contains("更新"));
+    assert!(portable_notice(true).contains("数据保持不变"));
+}
