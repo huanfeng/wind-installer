@@ -631,6 +631,7 @@ fn cmd_inspect(file: &Path) -> Result<(), String> {
     println!("  display_name  = {}", m.app.display_name);
     println!("  version       = {}", m.app.version);
     println!("  main_exe      = {}", m.app.main_exe);
+    println!("  launcher_exe  = {}", m.app.launcher_exe);
     println!("  owned_entries = {:?}（卸载只删这些顶层条目）", m.app.owned_entries);
 
     // 能力段：缺省即该能力不执行，故必须逐项列出「关」的那些——
